@@ -1,0 +1,83 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/opzkit/database-user-operator
+  pullPolicy: IfNotPresent
+  tag: 0.3.4
+imagePullSecrets: []
+nameOverride: ''
+fullnameOverride: ''
+controllerManager:
+  args:
+    - '--health-probe-bind-address=:8081'
+    - '--metrics-bind-address=:8080'
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 8081
+    initialDelaySeconds: 15
+    periodSeconds: 20
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: 8081
+    initialDelaySeconds: 5
+    periodSeconds: 10
+kubeRbacProxy:
+  enabled: true
+  image:
+    repository: quay.io/brancz/kube-rbac-proxy
+    tag: >-
+      v0.20.0@sha256:147cb28fea35473b2cf8697892d375bbe0aec237c5740b0368719b4c0d71b290
+    pullPolicy: IfNotPresent
+  args:
+    - '--secure-listen-address=0.0.0.0:8443'
+    - '--upstream=http://127.0.0.1:8080/'
+    - '--v=0'
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 5m
+      memory: 64Mi
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+podSecurityContext:
+  runAsNonRoot: true
+serviceAccount:
+  create: true
+  annotations: {}
+  name: db-operator
+rbac:
+  create: true
+metrics:
+  enabled: true
+  port: 8443
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    additionalLabels: {}
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+env: []
+extraVolumes: []
+extraVolumeMounts: []

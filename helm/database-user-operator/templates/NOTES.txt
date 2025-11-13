@@ -1,0 +1,43 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get all {{ .Release.Name }}
+
+The database-user-operator has been deployed to namespace: {{ .Release.Namespace }}
+
+{{- if .Values.metrics.enabled }}
+
+Metrics are enabled and exposed on port {{ .Values.metrics.port }}.
+{{- if .Values.metrics.serviceMonitor.enabled }}
+A ServiceMonitor has been created for Prometheus Operator integration.
+{{- end }}
+{{- end }}
+
+IMPORTANT: The operator requires AWS permissions to access Secrets Manager.
+AWS credentials must be configured externally via:
+  - IRSA (IAM Roles for Service Accounts) - recommended for EKS
+  - EC2 Instance Profile
+  - Environment variables or other AWS SDK credential chain methods
+
+Created database credentials are always stored in AWS Secrets Manager.
+
+To create a Database resource, see examples at:
+  https://github.com/opzkit/database-user-operator/tree/main/config/samples
+
+Example:
+  kubectl apply -f - <<EOF
+  apiVersion: database.opzkit.io/v1alpha1
+  kind: Database
+  metadata:
+    name: example-database
+  spec:
+    engine: postgres
+    databaseName: myapp_db
+    connectionStringSecretRef:
+      name: postgres-admin-connection
+      key: connectionString
+  EOF

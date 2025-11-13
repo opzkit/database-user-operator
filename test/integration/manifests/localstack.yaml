@@ -1,0 +1,104 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: localstack
+  namespace: databases
+  labels:
+    app: localstack
+spec:
+  type: NodePort
+  ports:
+    - name: edge
+      port: 4566
+      targetPort: 4566
+      nodePort: 30566
+  selector:
+    app: localstack
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: localstack
+  namespace: databases
+  labels:
+    app: localstack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: localstack
+  template:
+    metadata:
+      labels:
+        app: localstack
+    spec:
+      containers:
+        - name: localstack
+          image: localstack/localstack:3.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4566
+              name: edge
+          env:
+            - name: SERVICES
+              value: "secretsmanager"
+            - name: DEBUG
+              value: "1"
+            - name: DATA_DIR
+              value: "/tmp/localstack/data"
+            - name: DOCKER_HOST
+              value: "unix:///var/run/docker.sock"
+            - name: EAGER_SERVICE_LOADING
+              value: "1"
+          readinessProbe:
+            httpGet:
+              path: /_localstack/health
+              port: 4566
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /_localstack/health
+              port: 4566
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-config
+  namespace: default
+data:
+  config: |
+    [default]
+    region = us-east-1
+    output = json
+  credentials: |
+    [default]
+    aws_access_key_id = test
+    aws_secret_access_key = test
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-credentials
+  namespace: db-system
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: "test"
+  AWS_SECRET_ACCESS_KEY: "test"
+  AWS_REGION: "us-east-1"
+  AWS_ENDPOINT_URL: "http://localstack.databases.svc.cluster.local:4566"

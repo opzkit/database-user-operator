@@ -1,0 +1,49 @@
+version: "2"
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes: opzkit/database-user-operator
+
+linters:
+  # Default linters are already enabled: errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - misspell
+    - unconvert
+    - unparam
+    - gosec
+    - gocritic
+    - errorlint
+    - bodyclose
+  settings:
+    gosec:
+      excludes:
+        - G201 # SQL string formatting - we use quoteIdentifier for safety
+        - G402 # TLS MinVersion too low
+        - G115 # Integer overflow conversion
+    gocritic:
+      disabled-checks:
+        - ifElseChain # Allow if-else chains, switch statements aren't always clearer
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+      - path: zz_generated.*\.go
+        linters:
+          - goimports
+      - path: coverage.*\.go
+        linters:
+          - unused
+          - deadcode
+      - linters:
+          - staticcheck
+        text: "SA1019:" # Ignore deprecation warnings
