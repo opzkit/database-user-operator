@@ -22,7 +22,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@29d6f4d4c4aa0ef156d853b9450873c1e61b5f36 # v3.3.0
+        uses: docker/setup-qemu-action@53851d14592bedcffcf25ea515637cff71ef929a # v3.3.0
         with:
           platforms: arm64
 
