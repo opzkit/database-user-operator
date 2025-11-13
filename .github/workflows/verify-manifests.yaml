@@ -1,0 +1,42 @@
+name: Verify Manifests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  verify-manifests:
+    name: Verify Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Generate manifests
+        run: |
+          make controller-gen
+          make manifests
+          make generate
+
+      - name: Verify no changes
+        run: |
+          git diff --exit-code
+          if [ $? -ne 0 ]; then
+            echo "Generated files are out of date. Please run 'make manifests generate' and commit the changes."
+            exit 1
+          fi

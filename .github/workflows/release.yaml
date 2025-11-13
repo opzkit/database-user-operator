@@ -1,0 +1,185 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  packages: write
+  security-events: write
+
+jobs:
+  docker:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29d6f4d4c4aa0ef156d853b9450873c1e61b5f36 # v3.3.0
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        id: build
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
+        with:
+          image-ref: 'ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@0499de31b99561a6d14a36a5f662c2a54f91beee # v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy vulnerability scanner (Table output)
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
+        with:
+          image-ref: 'ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+  release-manifests:
+    name: Generate Release Manifests
+    runs-on: ubuntu-latest
+    needs: docker
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Generate manifests
+        run: |
+          make controller-gen
+          make manifests
+          make kustomize
+
+      - name: Build release manifests
+        run: |
+          cd config/manager
+          $(pwd)/../../bin/kustomize edit set image controller=ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }}
+          cd ../..
+          bin/kustomize build config/default > database-user-operator.yaml
+
+      - name: Upload release manifests
+        uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe # v2.4.2
+        with:
+          files: database-user-operator.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  helm-release:
+    name: Publish Helm Chart
+    runs-on: ubuntu-latest
+    needs: docker
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Install Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: 'latest'
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          VERSION=${TAG_NAME#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Get image digest from docker job
+        id: digest
+        run: |
+          DIGEST="${{ needs.docker.outputs.digest }}"
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "Image digest: $DIGEST"
+
+      - name: Update Chart version
+        run: |
+          sed -i "s/^version:.*/version: ${{ steps.version.outputs.version }}/" helm/database-user-operator/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.version.outputs.version }}\"/" helm/database-user-operator/Chart.yaml
+          sed -i "s/^  tag: .*/  tag: ${{ steps.version.outputs.version }}@${{ steps.digest.outputs.digest }}/" helm/database-user-operator/values.yaml
+
+      - name: Verify Chart updates
+        run: |
+          echo "=== Chart.yaml ==="
+          grep -A2 "^version:" helm/database-user-operator/Chart.yaml
+          echo "=== values.yaml image section ==="
+          grep -A3 "^image:" helm/database-user-operator/values.yaml
+
+      - name: Package Helm chart
+        run: |
+          helm package helm/database-user-operator
+
+      - name: Push Helm chart to GHCR
+        run: |
+          CHART_VERSION=${{ steps.version.outputs.version }}
+          helm push database-user-operator-${CHART_VERSION}.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
+
+      - name: Upload chart to GitHub Release
+        uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe # v2.4.2
+        with:
+          files: database-user-operator-${{ steps.version.outputs.version }}.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

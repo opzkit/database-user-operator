@@ -1,0 +1,48 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+testbin/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+cover.out
+
+# Kubernetes Generated files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# editor and IDE paraphernalia
+.idea
+*.swp
+*.swo
+*~
+.vscode
+
+# Temporary files
+.tmp/
+tmp/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# GitHub
+.github/
+
+# Config
+config/samples/

@@ -1,0 +1,17 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "database-user-operator.fullname" . }}-metrics
+  labels:
+    {{- include "database-user-operator.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - name: https
+    port: {{ .Values.metrics.port }}
+    protocol: TCP
+    targetPort: https
+  selector:
+    {{- include "database-user-operator.selectorLabels" . | nindent 4 }}
+{{- end }}

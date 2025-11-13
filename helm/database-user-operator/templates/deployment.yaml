@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "database-user-operator.fullname" . }}
+  labels:
+    {{- include "database-user-operator.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "database-user-operator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "database-user-operator.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "database-user-operator.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      {{- if .Values.kubeRbacProxy.enabled }}
+      - name: kube-rbac-proxy
+        image: {{ .Values.kubeRbacProxy.image.repository }}:{{ .Values.kubeRbacProxy.image.tag }}
+        imagePullPolicy: {{ .Values.kubeRbacProxy.image.pullPolicy }}
+        args:
+          {{- toYaml .Values.kubeRbacProxy.args | nindent 10 }}
+        ports:
+        - containerPort: 8443
+          name: https
+          protocol: TCP
+        resources:
+          {{- toYaml .Values.kubeRbacProxy.resources | nindent 10 }}
+        securityContext:
+          {{- toYaml .Values.kubeRbacProxy.securityContext | nindent 10 }}
+      {{- end }}
+      - name: manager
+        image: {{ include "database-user-operator.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+          {{- toYaml .Values.controllerManager.args | nindent 10 }}
+        command:
+        - /manager
+        {{- with .Values.env }}
+        env:
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        livenessProbe:
+          {{- toYaml .Values.controllerManager.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.controllerManager.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.controllerManager.resources | nindent 10 }}
+        securityContext:
+          {{- toYaml .Values.controllerManager.securityContext | nindent 10 }}
+        {{- with .Values.extraVolumeMounts }}
+        volumeMounts:
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 10
+      {{- with .Values.extraVolumes }}
+      volumes:
+      {{- toYaml . | nindent 6 }}
+      {{- end }}

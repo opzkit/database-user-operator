@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "local>opzkit/renovate-config"
+  ],
+  "packageRules": [
+    {
+      "description": "Ignore legacy +incompatible Kubernetes versions (pre-Go modules era)",
+      "matchDatasources": [
+        "go"
+      ],
+      "allowedVersions": "!/\\+incompatible$/",
+      "matchPackageNames": [
+        "/^k8s\\.io//"
+      ]
+    },
+    {
+      "description": "Disable updates for operator image in Helm values - managed by release-please",
+      "matchFileNames": [
+        "helm/database-user-operator/values.yaml"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/opzkit/database-user-operator"
+      ],
+      "enabled": false
+    }
+  ]
+}

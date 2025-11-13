@@ -1,0 +1,29 @@
+# kind cluster configuration for integration tests
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: database-operator-test
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # PostgreSQL NodePort
+      - containerPort: 30432
+        hostPort: 15432
+        protocol: TCP
+      # MySQL NodePort
+      - containerPort: 30306
+        hostPort: 13306
+        protocol: TCP
+      # LocalStack NodePort
+      - containerPort: 30566
+        hostPort: 14566
+        protocol: TCP
+    extraMounts:
+      # Mount for integration test coverage data
+      - hostPath: /tmp/coverage
+        containerPath: /tmp/coverage

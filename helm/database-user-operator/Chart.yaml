@@ -1,0 +1,24 @@
+apiVersion: v2
+name: database-user-operator
+description: >-
+  A Kubernetes operator for managing PostgreSQL and MySQL databases with AWS
+  Secrets Manager integration and customizable secret templates
+type: application
+version: 0.3.4
+appVersion: 0.3.4
+home: https://github.com/opzkit/database-user-operator
+sources:
+  - https://github.com/opzkit/database-user-operator
+keywords:
+  - database
+  - postgres
+  - postgresql
+  - mysql
+  - mariadb
+  - operator
+  - aws
+  - secrets-manager
+  - rds
+maintainers:
+  - name: OpzKit
+    email: noreply@opzkit.io
