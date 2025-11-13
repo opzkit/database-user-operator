@@ -83,7 +83,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if err := r.Update(ctx, db); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: time.Minute}, nil
 	}
 
 	// Perform reconciliation
@@ -128,18 +128,18 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if isAWSPermissionError(err) {
 			logger.Error(err, "AWS permission error - requires IAM policy update",
 				"action", "Update IAM policy or IRSA configuration to grant Secrets Manager permissions",
-				"requeueAfter", "5m")
-			// Use 5 minute backoff to prevent log spam while allowing automatic recovery
-			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+				"requeueAfter", "1m")
+			// Use 1 minute backoff to prevent log spam while allowing automatic recovery
+			return ctrl.Result{RequeueAfter: time.Minute}, nil
 		}
 
 		// Handle ResourceNotFoundException with longer backoff since it requires manual intervention
 		if isAWSResourceNotFoundError(err) {
 			logger.Error(err, "AWS resource not found - requires manual configuration",
 				"action", "Verify secret exists in AWS Secrets Manager and the name/region are correct",
-				"requeueAfter", "5m")
-			// Use 5 minute backoff to prevent log spam while allowing automatic recovery
-			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+				"requeueAfter", "1m")
+			// Use 1 minute backoff to prevent log spam while allowing automatic recovery
+			return ctrl.Result{RequeueAfter: time.Minute}, nil
 		}
 
 		// Return error to trigger rate limiter's exponential backoff
@@ -812,87 +812,143 @@ func (r *DatabaseReconciler) reconcileDelete(ctx context.Context, db *databasev1
 			"username", db.Status.ActualUsername,
 			"secretName", db.Status.ActualSecretName)
 
-		// Track what was actually deleted
+		// Track what was actually deleted and collect errors
+		var cleanupErrors []error
 		databaseDeleted := false
 		userDeleted := false
 		secretDeleted := false
 
 		// Drop database and user
-		connectionString, _ := r.getConnectionString(ctx, db)
-		if connectionString != "" {
-			if dbClient, err := database.NewClient(string(db.Spec.Engine), connectionString); err == nil {
+		connectionString, connErr := r.getConnectionString(ctx, db)
+		if connErr != nil {
+			logger.Error(connErr, "Failed to get connection string for cleanup")
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to get connection string: %w", connErr))
+		} else if connectionString != "" {
+			dbClient, err := database.NewClient(string(db.Spec.Engine), connectionString)
+			if err != nil {
+				logger.Error(err, "Failed to create database client for cleanup")
+				cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to create database client: %w", err))
+			} else {
 				defer func() {
 					if closeErr := dbClient.Close(); closeErr != nil {
 						logger.Error(closeErr, "Failed to close database connection during cleanup")
 					}
 				}()
-				if db.Status.DatabaseCreated {
+
+				// Check if database actually exists and drop it
+				dbExists, err := dbClient.DatabaseExists(ctx, db.Spec.DatabaseName)
+				if err != nil {
+					logger.Error(err, "Failed to check if database exists",
+						"database", db.Spec.DatabaseName)
+					cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to check database existence: %w", err))
+				} else if dbExists {
 					logger.Info("Dropping database",
 						"database", db.Spec.DatabaseName)
-					if err := dbClient.DropDatabase(ctx, db.Spec.DatabaseName); err == nil {
+					if err := dbClient.DropDatabase(ctx, db.Spec.DatabaseName); err != nil {
+						logger.Error(err, "Failed to drop database",
+							"database", db.Spec.DatabaseName)
+						cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to drop database %s: %w", db.Spec.DatabaseName, err))
+					} else {
 						databaseDeleted = true
 						logger.Info("Database dropped successfully",
 							"database", db.Spec.DatabaseName)
-					} else {
-						logger.Error(err, "Failed to drop database",
-							"database", db.Spec.DatabaseName)
 					}
+				} else {
+					logger.Info("Database does not exist, skipping drop",
+						"database", db.Spec.DatabaseName)
 				}
-				if db.Status.UserCreated {
+
+				// Determine the username to check/delete
+				username := db.Status.ActualUsername
+				if username == "" {
+					username = getUsernameOrDefault(db)
+				}
+
+				// Check if user actually exists and drop it
+				userExists, err := dbClient.UserExists(ctx, username)
+				if err != nil {
+					logger.Error(err, "Failed to check if user exists",
+						"username", username)
+					cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to check user existence: %w", err))
+				} else if userExists {
 					logger.Info("Dropping user",
-						"username", db.Status.ActualUsername)
-					if err := dbClient.DropUser(ctx, db.Status.ActualUsername); err == nil {
+						"username", username)
+					if err := dbClient.DropUser(ctx, username); err != nil {
+						logger.Error(err, "Failed to drop user",
+							"username", username)
+						cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to drop user %s: %w", username, err))
+					} else {
 						userDeleted = true
 						logger.Info("User dropped successfully",
-							"username", db.Status.ActualUsername)
-					} else {
-						logger.Error(err, "Failed to drop user",
-							"username", db.Status.ActualUsername)
+							"username", username)
 					}
+				} else {
+					logger.Info("User does not exist, skipping drop",
+						"username", username)
 				}
 			}
 		}
 
 		// Delete credentials from AWS Secrets Manager
-		if db.Status.SecretCreated {
-			region := r.getRegion(db)
+		// Try to delete even if status doesn't indicate creation, as the secret might exist
+		region := r.getRegion(db)
 
-			// Validate region
-			if err := secrets.ValidateRegion(region); err != nil {
-				logger.Error(err, "Invalid AWS region for secret deletion, skipping",
+		// Validate region
+		if err := secrets.ValidateRegion(region); err != nil {
+			logger.Error(err, "Invalid AWS region for secret deletion")
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("invalid AWS region %s: %w", region, err))
+		} else {
+			awsClient, err := secrets.NewAWSSecretsManagerClient(ctx, region)
+			if err != nil {
+				logger.Error(err, "Failed to create AWS Secrets Manager client for deletion",
 					"region", region)
+				cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to create AWS client: %w", err))
 			} else {
-				awsClient, err := secrets.NewAWSSecretsManagerClient(ctx, region)
-				if err != nil {
-					logger.Error(err, "Failed to create AWS Secrets Manager client for deletion",
-						"secretName", db.Status.ActualSecretName,
-						"region", region)
-				} else {
-					// Get the actual resolved region
-					region = awsClient.GetRegion()
+				// Get the actual resolved region
+				region = awsClient.GetRegion()
 
-					logger.Info("Deleting secret from AWS Secrets Manager",
-						"secretName", db.Status.ActualSecretName,
-						"secretARN", db.Status.SecretARN,
-						"region", region)
+				// Determine the secret name to delete
+				secretName := db.Status.ActualSecretName
+				if secretName == "" {
+					secretName = getSecretNameOrDefault(db)
+				}
 
-					if err := awsClient.DeleteSecret(ctx, db.Status.ActualSecretName, true); err == nil {
-						secretDeleted = true
-						logger.Info("Secret deleted successfully from AWS Secrets Manager",
-							"secretName", db.Status.ActualSecretName,
-							"secretARN", db.Status.SecretARN,
-							"region", region)
-					} else {
+				logger.Info("Deleting secret from AWS Secrets Manager",
+					"secretName", secretName,
+					"region", region)
+
+				if err := awsClient.DeleteSecret(ctx, secretName, true); err != nil {
+					// Ignore ResourceNotFoundException - secret doesn't exist, which is fine
+					if !isAWSResourceNotFoundError(err) {
 						logger.Error(err, "Failed to delete secret from AWS Secrets Manager",
-							"secretName", db.Status.ActualSecretName,
-							"secretARN", db.Status.SecretARN,
+							"secretName", secretName,
+							"region", region)
+						cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to delete secret %s: %w", secretName, err))
+					} else {
+						logger.Info("Secret does not exist, skipping deletion",
+							"secretName", secretName,
 							"region", region)
 					}
+				} else {
+					secretDeleted = true
+					logger.Info("Secret deleted successfully from AWS Secrets Manager",
+						"secretName", secretName,
+						"region", region)
 				}
 			}
 		}
 
-		logger.Info("Cleanup completed",
+		// If there were any cleanup errors, return them to retry
+		if len(cleanupErrors) > 0 {
+			logger.Error(fmt.Errorf("cleanup failed with %d errors", len(cleanupErrors)), "Cleanup errors occurred - will retry",
+				"databaseDeleted", databaseDeleted,
+				"userDeleted", userDeleted,
+				"secretDeleted", secretDeleted)
+			// Return the first error to trigger retry
+			return ctrl.Result{}, cleanupErrors[0]
+		}
+
+		logger.Info("Cleanup completed successfully",
 			"database", db.Spec.DatabaseName,
 			"databaseDeleted", databaseDeleted,
 			"userDeleted", userDeleted,

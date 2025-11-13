@@ -199,6 +199,14 @@ func (c *PostgresClient) CreateUser(ctx context.Context, username, password stri
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
 		}
+
+		// Grant the new user to the current admin user so we can SET ROLE to it
+		// This is required for CREATE DATABASE ... OWNER to work in managed PostgreSQL (RDS, etc)
+		grantQuery := fmt.Sprintf("GRANT %s TO CURRENT_USER", quoteIdentifier(username))
+		_, err = c.db.ExecContext(ctx, grantQuery)
+		if err != nil {
+			return fmt.Errorf("failed to grant user to admin: %w", err)
+		}
 	}
 
 	// Add comment to role indicating it's managed by the operator
