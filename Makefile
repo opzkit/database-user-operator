@@ -175,7 +175,7 @@ integration-setup: integration-tools ## Setup kind cluster with databases and op
 .PHONY: integration-run
 integration-run: manifests generate fmt vet ## Run integration tests (requires cluster setup first)
 	@echo "Running integration tests..."
-	@go test -v -tags=integration ./test/integration/... -timeout 5m -ginkgo.v -ginkgo.progress
+	@go test -v -tags=integration ./test/integration/... -timeout 5m -ginkgo.vv
 
 .PHONY: integration-teardown
 integration-teardown: ## Teardown kind cluster
