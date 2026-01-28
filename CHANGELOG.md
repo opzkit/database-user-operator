@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/opzkit/database-user-operator/compare/v0.1.1...v0.1.2) (2026-01-28)
+
+
+### Bug Fixes
+
+* **deps:** update aws-sdk-go-v2 monorepo ([#14](https://github.com/opzkit/database-user-operator/issues/14)) ([2d8913e](https://github.com/opzkit/database-user-operator/commit/2d8913e24bf2064fc606f5b6c2303ba498bd6f9d))
+* **deps:** update kubernetes packages to v0.35.0 ([#34](https://github.com/opzkit/database-user-operator/issues/34)) ([651909d](https://github.com/opzkit/database-user-operator/commit/651909d95a05571fc790246c695063cbd7fae00a))
+
 ## [0.1.1](https://github.com/opzkit/database-user-operator/compare/v0.1.0...v0.1.1) (2025-11-14)
 
 
