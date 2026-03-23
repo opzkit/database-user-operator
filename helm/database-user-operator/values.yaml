@@ -39,7 +39,7 @@ kubeRbacProxy:
   image:
     repository: quay.io/brancz/kube-rbac-proxy
     tag: >-
-      v0.21.0@sha256:cbdad91c207e55cf366b59ce3e6c9d3f3e0b8e51ff33c1e7d153c2f762d83a1e
+      v0.21.2@sha256:23bf4d4ddbb6827ede3a26d98814e3f3733b257e8b70de54c77e78eb7ed6d719
     pullPolicy: IfNotPresent
   args:
     - '--secure-listen-address=0.0.0.0:8443'
