@@ -16,24 +16,47 @@ import (
 
 // ErrNoBackendConfigured is returned when a Database resource doesn't
 // specify any of the supported destination backends.
-var ErrNoBackendConfigured = errors.New("no destination backend configured: set spec.awsSecretsManager (later: spec.kubernetesSecret, spec.infisical)")
+var ErrNoBackendConfigured = errors.New("spec.secretBackend has no backend configured: set one of aws, kubernetes, infisical")
+
+// ErrMultipleBackendsConfigured is returned when a Database resource
+// specifies more than one destination backend simultaneously.
+var ErrMultipleBackendsConfigured = errors.New("spec.secretBackend has multiple backends configured: set exactly one of aws, kubernetes, infisical")
 
 // NewBackend selects and constructs a Backend implementation based on
-// which spec field is populated on the Database CR. Region resolution and
-// other backend-specific defaulting happens in the implementation
-// constructors.
+// which spec.secretBackend.* field is populated. Returns
+// ErrMultipleBackendsConfigured / ErrNoBackendConfigured if zero or
+// more than one backend is set.
 func NewBackend(ctx context.Context, db *databasev1alpha1.Database) (Backend, error) {
+	sb := db.Spec.SecretBackend
+
+	count := 0
+	if sb.AWS != nil {
+		count++
+	}
+	if sb.Kubernetes != nil {
+		count++
+	}
+	if sb.Infisical != nil {
+		count++
+	}
+	if count == 0 {
+		return nil, ErrNoBackendConfigured
+	}
+	if count > 1 {
+		return nil, ErrMultipleBackendsConfigured
+	}
+
 	switch {
-	case db.Spec.AWSSecretsManager != nil:
-		region := db.Spec.AWSSecretsManager.Region
-		if err := ValidateRegion(region); err != nil {
+	case sb.AWS != nil:
+		if err := ValidateRegion(sb.AWS.Region); err != nil {
 			return nil, err
 		}
-		return NewAWSSecretsManagerClient(ctx, region)
+		return NewAWSSecretsManagerClient(ctx, sb.AWS.Region)
 
-	// Future:
-	//   case db.Spec.KubernetesSecret != nil: return NewKubernetesBackend(...)
-	//   case db.Spec.Infisical != nil:        return NewInfisicalBackend(...)
+	// Phase 2:
+	//   case sb.Kubernetes != nil: return NewKubernetesBackend(...)
+	// Phase 3:
+	//   case sb.Infisical != nil:  return NewInfisicalBackend(...)
 
 	default:
 		return nil, ErrNoBackendConfigured

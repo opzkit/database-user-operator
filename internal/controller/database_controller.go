@@ -313,8 +313,8 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 
 			// Always update tags to ensure they're in sync with spec
 			desiredTags := map[string]string{"ManagedBy": "database-user-operator"}
-			if db.Spec.AWSSecretsManager != nil {
-				for k, v := range db.Spec.AWSSecretsManager.Tags {
+			if db.Spec.SecretBackend.AWS != nil {
+				for k, v := range db.Spec.SecretBackend.AWS.Tags {
 					desiredTags[k] = v
 				}
 			}
@@ -535,9 +535,9 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 	// Determine region: use awsSecretsManager.region if set, otherwise use connectionStringAWSSecretRef.region
 	region := r.getRegion(db)
 	var regionSource string
-	if db.Spec.AWSSecretsManager != nil && db.Spec.AWSSecretsManager.Region != "" {
+	if db.Spec.SecretBackend.AWS != nil && db.Spec.SecretBackend.AWS.Region != "" {
 		regionSource = "spec.awsSecretsManager.region"
-	} else if db.Spec.ConnectionStringAWSSecretRef != nil && db.Spec.ConnectionStringAWSSecretRef.Region != "" {
+	} else if db.Spec.ConnectionString.AWS != nil && db.Spec.ConnectionString.AWS.Region != "" {
 		regionSource = "spec.connectionStringAWSSecretRef.region"
 	} else {
 		regionSource = "AWS SDK default (environment/instance metadata)"
@@ -677,11 +677,11 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 	if createSecret {
 		description := "Database credentials for " + db.Spec.DatabaseName
 		tags := map[string]string{"ManagedBy": "database-user-operator"}
-		if db.Spec.AWSSecretsManager != nil {
-			if db.Spec.AWSSecretsManager.Description != "" {
-				description = db.Spec.AWSSecretsManager.Description
+		if db.Spec.SecretBackend.AWS != nil {
+			if db.Spec.SecretBackend.AWS.Description != "" {
+				description = db.Spec.SecretBackend.AWS.Description
 			}
-			for k, v := range db.Spec.AWSSecretsManager.Tags {
+			for k, v := range db.Spec.SecretBackend.AWS.Tags {
 				tags[k] = v
 			}
 		}
@@ -703,8 +703,8 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 
 	// Always update tags to ensure they're in sync with spec
 	desiredTags := map[string]string{"ManagedBy": "database-user-operator"}
-	if db.Spec.AWSSecretsManager != nil {
-		for k, v := range db.Spec.AWSSecretsManager.Tags {
+	if db.Spec.SecretBackend.AWS != nil {
+		for k, v := range db.Spec.SecretBackend.AWS.Tags {
 			desiredTags[k] = v
 		}
 	}
@@ -980,37 +980,37 @@ func (r *DatabaseReconciler) getConnectionString(ctx context.Context, db *databa
 	}
 
 	// Check which source is configured
-	if db.Spec.ConnectionStringSecretRef != nil {
+	if db.Spec.ConnectionString.Kubernetes != nil {
 		logger.Info("Using Kubernetes Secret for admin connection string",
 			"database", db.Spec.DatabaseName,
-			"secretName", db.Spec.ConnectionStringSecretRef.Name)
+			"secretName", db.Spec.ConnectionString.Kubernetes.Name)
 		return r.getConnectionStringFromK8sSecret(ctx, db)
 	}
 
 	// Must be AWS secret (already validated)
 	logger.Info("Using AWS Secrets Manager for admin connection string",
 		"database", db.Spec.DatabaseName,
-		"secretName", db.Spec.ConnectionStringAWSSecretRef.SecretName,
-		"region", db.Spec.ConnectionStringAWSSecretRef.Region)
+		"secretName", db.Spec.ConnectionString.AWS.SecretName,
+		"region", db.Spec.ConnectionString.AWS.Region)
 	return r.getConnectionStringFromAWSSecret(ctx, db)
 }
 
 func (r *DatabaseReconciler) getConnectionStringFromK8sSecret(ctx context.Context, db *databasev1alpha1.Database) (string, error) {
 	secret := &corev1.Secret{}
-	if err := r.Get(ctx, client.ObjectKey{Name: db.Spec.ConnectionStringSecretRef.Name, Namespace: db.Namespace}, secret); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: db.Spec.ConnectionString.Kubernetes.Name, Namespace: db.Namespace}, secret); err != nil {
 		return "", err
 	}
-	key := getSecretKeyOrDefault(db.Spec.ConnectionStringSecretRef)
+	key := connectionStringKeyDefault(db.Spec.ConnectionString.Kubernetes.Key)
 	connectionString := string(secret.Data[key])
 	if connectionString == "" {
-		return "", fmt.Errorf("connection string is empty in secret %s key %s", db.Spec.ConnectionStringSecretRef.Name, key)
+		return "", fmt.Errorf("connection string is empty in secret %s key %s", db.Spec.ConnectionString.Kubernetes.Name, key)
 	}
 	return connectionString, nil
 }
 
 func (r *DatabaseReconciler) getConnectionStringFromAWSSecret(ctx context.Context, db *databasev1alpha1.Database) (string, error) {
 	logger := log.FromContext(ctx)
-	awsRef := db.Spec.ConnectionStringAWSSecretRef
+	awsRef := db.Spec.ConnectionString.AWS
 
 	// Validate region
 	if err := secrets.ValidateRegion(awsRef.Region); err != nil {
@@ -1064,23 +1064,24 @@ func (r *DatabaseReconciler) getConnectionStringFromAWSSecret(ctx context.Contex
 	return secretValue, nil
 }
 
-// validateConnectionSource validates that only one connection string source is configured
+// validateConnectionSource validates that exactly one connection string source is configured.
 func validateConnectionSource(db *databasev1alpha1.Database) error {
-	if db.Spec.ConnectionStringSecretRef != nil && db.Spec.ConnectionStringAWSSecretRef != nil {
-		return fmt.Errorf("both ConnectionStringSecretRef and ConnectionStringAWSSecretRef are specified, only one is allowed")
+	cs := db.Spec.ConnectionString
+	if cs.Kubernetes != nil && cs.AWS != nil {
+		return fmt.Errorf("both connectionString.kubernetes and connectionString.aws are specified, only one is allowed")
 	}
-	if db.Spec.ConnectionStringSecretRef == nil && db.Spec.ConnectionStringAWSSecretRef == nil {
-		return fmt.Errorf("neither ConnectionStringSecretRef nor ConnectionStringAWSSecretRef is specified")
+	if cs.Kubernetes == nil && cs.AWS == nil {
+		return fmt.Errorf("neither connectionString.kubernetes nor connectionString.aws is specified")
 	}
 	return nil
 }
 
-// getSecretKeyOrDefault returns the secret key from the reference, or the default key if not specified
-func getSecretKeyOrDefault(ref *databasev1alpha1.SecretKeyReference) string {
-	if ref == nil || ref.Key == "" {
+// connectionStringKeyDefault returns the secret key (or "connectionString" by default).
+func connectionStringKeyDefault(key string) string {
+	if key == "" {
 		return "connectionString"
 	}
-	return ref.Key
+	return key
 }
 
 // getUsernameOrDefault returns the username from the spec, or the database name if not specified
@@ -1161,11 +1162,11 @@ func getTagsToAdd(current, desired map[string]string) map[string]string {
 // getRegion determines the AWS region from the Database spec
 // Priority: spec.awsSecretsManager.region > spec.connectionStringAWSSecretRef.region > empty (AWS SDK default)
 func (r *DatabaseReconciler) getRegion(db *databasev1alpha1.Database) string {
-	if db.Spec.AWSSecretsManager != nil && db.Spec.AWSSecretsManager.Region != "" {
-		return db.Spec.AWSSecretsManager.Region
+	if db.Spec.SecretBackend.AWS != nil && db.Spec.SecretBackend.AWS.Region != "" {
+		return db.Spec.SecretBackend.AWS.Region
 	}
-	if db.Spec.ConnectionStringAWSSecretRef != nil && db.Spec.ConnectionStringAWSSecretRef.Region != "" {
-		return db.Spec.ConnectionStringAWSSecretRef.Region
+	if db.Spec.ConnectionString.AWS != nil && db.Spec.ConnectionString.AWS.Region != "" {
+		return db.Spec.ConnectionString.AWS.Region
 	}
 	return "" // Empty string means use AWS SDK default
 }

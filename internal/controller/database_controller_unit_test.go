@@ -25,27 +25,33 @@ func TestGetRegion(t *testing.T) {
 		want string
 	}{
 		{
-			name: "awsSecretsManager region takes priority",
+			name: "secretBackend.aws region takes priority",
 			db: &databasev1alpha1.Database{
 				Spec: databasev1alpha1.DatabaseSpec{
-					AWSSecretsManager: &databasev1alpha1.AWSSecretsManagerConfig{
-						Region: "us-west-1",
+					SecretBackend: databasev1alpha1.SecretBackend{
+						AWS: &databasev1alpha1.AWSSecretBackend{
+							Region: "us-west-1",
+						},
 					},
-					ConnectionStringAWSSecretRef: &databasev1alpha1.AWSSecretReference{
-						SecretName: "test-secret",
-						Region:     "us-east-1",
+					ConnectionString: databasev1alpha1.ConnectionStringSource{
+						AWS: &databasev1alpha1.AWSConnectionStringRef{
+							SecretName: "test-secret",
+							Region:     "us-east-1",
+						},
 					},
 				},
 			},
 			want: "us-west-1",
 		},
 		{
-			name: "connectionStringAWSSecretRef region when no awsSecretsManager",
+			name: "connectionString.aws region when no secretBackend.aws",
 			db: &databasev1alpha1.Database{
 				Spec: databasev1alpha1.DatabaseSpec{
-					ConnectionStringAWSSecretRef: &databasev1alpha1.AWSSecretReference{
-						SecretName: "test-secret",
-						Region:     "ap-southeast-1",
+					ConnectionString: databasev1alpha1.ConnectionStringSource{
+						AWS: &databasev1alpha1.AWSConnectionStringRef{
+							SecretName: "test-secret",
+							Region:     "ap-southeast-1",
+						},
 					},
 				},
 			},
@@ -238,8 +244,10 @@ func TestValidateConnectionSource(t *testing.T) {
 			name: "valid - only k8s secret",
 			db: &databasev1alpha1.Database{
 				Spec: databasev1alpha1.DatabaseSpec{
-					ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-						Name: "my-secret",
+					ConnectionString: databasev1alpha1.ConnectionStringSource{
+						Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+							Name: "my-secret",
+						},
 					},
 				},
 			},
@@ -249,9 +257,11 @@ func TestValidateConnectionSource(t *testing.T) {
 			name: "valid - only AWS secret",
 			db: &databasev1alpha1.Database{
 				Spec: databasev1alpha1.DatabaseSpec{
-					ConnectionStringAWSSecretRef: &databasev1alpha1.AWSSecretReference{
-						SecretName: "my-aws-secret",
-						Region:     "us-east-1",
+					ConnectionString: databasev1alpha1.ConnectionStringSource{
+						AWS: &databasev1alpha1.AWSConnectionStringRef{
+							SecretName: "my-aws-secret",
+							Region:     "us-east-1",
+						},
 					},
 				},
 			},
@@ -261,17 +271,19 @@ func TestValidateConnectionSource(t *testing.T) {
 			name: "invalid - both configured",
 			db: &databasev1alpha1.Database{
 				Spec: databasev1alpha1.DatabaseSpec{
-					ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-						Name: "my-secret",
-					},
-					ConnectionStringAWSSecretRef: &databasev1alpha1.AWSSecretReference{
-						SecretName: "my-aws-secret",
-						Region:     "us-east-1",
+					ConnectionString: databasev1alpha1.ConnectionStringSource{
+						Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+							Name: "my-secret",
+						},
+						AWS: &databasev1alpha1.AWSConnectionStringRef{
+							SecretName: "my-aws-secret",
+							Region:     "us-east-1",
+						},
 					},
 				},
 			},
 			wantErr: true,
-			errMsg:  "both ConnectionStringSecretRef and ConnectionStringAWSSecretRef are specified",
+			errMsg:  "both connectionString.kubernetes and connectionString.aws are specified",
 		},
 		{
 			name: "invalid - neither configured",
@@ -279,7 +291,7 @@ func TestValidateConnectionSource(t *testing.T) {
 				Spec: databasev1alpha1.DatabaseSpec{},
 			},
 			wantErr: true,
-			errMsg:  "neither ConnectionStringSecretRef nor ConnectionStringAWSSecretRef is specified",
+			errMsg:  "neither connectionString.kubernetes nor connectionString.aws is specified",
 		},
 	}
 
@@ -298,40 +310,29 @@ func TestValidateConnectionSource(t *testing.T) {
 	}
 }
 
-func TestGetSecretKeyOrDefault(t *testing.T) {
+func TestConnectionStringKeyDefault(t *testing.T) {
 	tests := []struct {
 		name string
-		ref  *databasev1alpha1.SecretKeyReference
+		key  string
 		want string
 	}{
 		{
-			name: "nil reference returns default",
-			ref:  nil,
-			want: "connectionString",
-		},
-		{
 			name: "empty key returns default",
-			ref: &databasev1alpha1.SecretKeyReference{
-				Name: "my-secret",
-				Key:  "",
-			},
+			key:  "",
 			want: "connectionString",
 		},
 		{
-			name: "custom key",
-			ref: &databasev1alpha1.SecretKeyReference{
-				Name: "my-secret",
-				Key:  "customKey",
-			},
+			name: "custom key returns it unchanged",
+			key:  "customKey",
 			want: "customKey",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getSecretKeyOrDefault(tt.ref)
+			got := connectionStringKeyDefault(tt.key)
 			if got != tt.want {
-				t.Errorf("getSecretKeyOrDefault() = %v, want %v", got, tt.want)
+				t.Errorf("connectionStringKeyDefault(%q) = %v, want %v", tt.key, got, tt.want)
 			}
 		})
 	}

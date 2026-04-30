@@ -64,134 +64,79 @@ spec:
           spec:
             description: DatabaseSpec defines the desired state of Database
             properties:
-              awsSecretsManager:
+              connectionString:
                 description: |-
-                  AWSSecretsManager contains AWS Secrets Manager specific configuration for storing created credentials
-                  All created credentials are stored in AWS Secrets Manager regardless of connection string source
+                  ConnectionString sources the admin DSN used to create the database
+                  and user. Exactly one of the inner fields (aws, kubernetes, ...)
+                  must be set.
                 properties:
-                  description:
-                    description: Description is the description for the AWS Secrets
-                      Manager secret
-                    type: string
-                  region:
-                    description: Region is the AWS region for Secrets Manager
-                    enum:
-                    - us-east-1
-                    - us-east-2
-                    - us-west-1
-                    - us-west-2
-                    - us-gov-west-1
-                    - us-gov-east-1
-                    - af-south-1
-                    - ap-east-1
-                    - ap-south-1
-                    - ap-south-2
-                    - ap-northeast-1
-                    - ap-northeast-2
-                    - ap-northeast-3
-                    - ap-southeast-1
-                    - ap-southeast-2
-                    - ap-southeast-3
-                    - ap-southeast-4
-                    - ca-central-1
-                    - ca-west-1
-                    - eu-central-1
-                    - eu-central-2
-                    - eu-west-1
-                    - eu-west-2
-                    - eu-west-3
-                    - eu-south-1
-                    - eu-south-2
-                    - eu-north-1
-                    - me-south-1
-                    - me-central-1
-                    - sa-east-1
-                    - cn-north-1
-                    - cn-northwest-1
-                    - il-central-1
-                    type: string
-                  tags:
-                    additionalProperties:
-                      type: string
-                    description: Tags are tags to apply to the AWS Secrets Manager
-                      secret
+                  aws:
+                    description: AWS reads the connection string from an AWS Secrets
+                      Manager secret.
+                    properties:
+                      key:
+                        description: Key within the secret JSON. Defaults to "connectionString".
+                        type: string
+                      region:
+                        description: Region is the AWS region for Secrets Manager
+                        enum:
+                        - us-east-1
+                        - us-east-2
+                        - us-west-1
+                        - us-west-2
+                        - us-gov-west-1
+                        - us-gov-east-1
+                        - af-south-1
+                        - ap-east-1
+                        - ap-south-1
+                        - ap-south-2
+                        - ap-northeast-1
+                        - ap-northeast-2
+                        - ap-northeast-3
+                        - ap-southeast-1
+                        - ap-southeast-2
+                        - ap-southeast-3
+                        - ap-southeast-4
+                        - ca-central-1
+                        - ca-west-1
+                        - eu-central-1
+                        - eu-central-2
+                        - eu-west-1
+                        - eu-west-2
+                        - eu-west-3
+                        - eu-south-1
+                        - eu-south-2
+                        - eu-north-1
+                        - me-south-1
+                        - me-central-1
+                        - sa-east-1
+                        - cn-north-1
+                        - cn-northwest-1
+                        - il-central-1
+                        type: string
+                      secretName:
+                        description: SecretName is the name or ARN of the AWS Secrets
+                          Manager secret
+                        type: string
+                    required:
+                    - region
+                    - secretName
                     type: object
-                required:
-                - region
-                type: object
-              connectionStringAWSSecretRef:
-                description: |-
-                  ConnectionStringAWSSecretRef references an AWS Secrets Manager secret containing the admin connection string
-                  Either ConnectionStringSecretRef or ConnectionStringAWSSecretRef must be specified.
-                  Note: Created database credentials will always be stored in AWS Secrets Manager.
-                properties:
-                  key:
+                  kubernetes:
                     description: |-
-                      Key within the secret JSON
-                      Defaults to "connectionString"
-                    type: string
-                  region:
-                    description: Region is the AWS region for Secrets Manager
-                    enum:
-                    - us-east-1
-                    - us-east-2
-                    - us-west-1
-                    - us-west-2
-                    - us-gov-west-1
-                    - us-gov-east-1
-                    - af-south-1
-                    - ap-east-1
-                    - ap-south-1
-                    - ap-south-2
-                    - ap-northeast-1
-                    - ap-northeast-2
-                    - ap-northeast-3
-                    - ap-southeast-1
-                    - ap-southeast-2
-                    - ap-southeast-3
-                    - ap-southeast-4
-                    - ca-central-1
-                    - ca-west-1
-                    - eu-central-1
-                    - eu-central-2
-                    - eu-west-1
-                    - eu-west-2
-                    - eu-west-3
-                    - eu-south-1
-                    - eu-south-2
-                    - eu-north-1
-                    - me-south-1
-                    - me-central-1
-                    - sa-east-1
-                    - cn-north-1
-                    - cn-northwest-1
-                    - il-central-1
-                    type: string
-                  secretName:
-                    description: SecretName is the name or ARN of the AWS Secrets
-                      Manager secret
-                    type: string
-                required:
-                - region
-                - secretName
-                type: object
-              connectionStringSecretRef:
-                description: |-
-                  ConnectionStringSecretRef references a Kubernetes Secret containing the admin connection string
-                  to the existing database instance. Must have proper permissions to create databases and users.
-                  Either ConnectionStringSecretRef or ConnectionStringAWSSecretRef must be specified.
-                  Note: Created database credentials will always be stored in AWS Secrets Manager.
-                properties:
-                  key:
-                    description: |-
-                      Key within the secret
-                      Defaults to "connectionString"
-                    type: string
-                  name:
-                    description: Name of the secret
-                    type: string
-                required:
-                - name
+                      Kubernetes reads the connection string from a Kubernetes Secret in
+                      the same namespace as the Database.
+                    properties:
+                      key:
+                        description: Key within the secret. Defaults to "connectionString".
+                        type: string
+                      name:
+                        description: Name of the secret in the same namespace as the
+                          Database.
+                        type: string
+                    required:
+                    - name
+                    type: object
                 type: object
               databaseName:
                 description: DatabaseName is the name of the database to create
@@ -221,10 +166,120 @@ spec:
                   RetainOnDelete determines whether to retain the database and user when the CR is deleted
                   Defaults to true (retains resources on deletion)
                 type: boolean
+              secretBackend:
+                description: |-
+                  SecretBackend chooses where to store the generated user credentials.
+                  Exactly one of the inner fields (aws, kubernetes, infisical) must
+                  be set.
+                properties:
+                  aws:
+                    description: AWS stores credentials in AWS Secrets Manager.
+                    properties:
+                      description:
+                        description: Description is the description for the AWS Secrets
+                          Manager secret
+                        type: string
+                      region:
+                        description: Region is the AWS region for Secrets Manager
+                        enum:
+                        - us-east-1
+                        - us-east-2
+                        - us-west-1
+                        - us-west-2
+                        - us-gov-west-1
+                        - us-gov-east-1
+                        - af-south-1
+                        - ap-east-1
+                        - ap-south-1
+                        - ap-south-2
+                        - ap-northeast-1
+                        - ap-northeast-2
+                        - ap-northeast-3
+                        - ap-southeast-1
+                        - ap-southeast-2
+                        - ap-southeast-3
+                        - ap-southeast-4
+                        - ca-central-1
+                        - ca-west-1
+                        - eu-central-1
+                        - eu-central-2
+                        - eu-west-1
+                        - eu-west-2
+                        - eu-west-3
+                        - eu-south-1
+                        - eu-south-2
+                        - eu-north-1
+                        - me-south-1
+                        - me-central-1
+                        - sa-east-1
+                        - cn-north-1
+                        - cn-northwest-1
+                        - il-central-1
+                        type: string
+                      tags:
+                        additionalProperties:
+                          type: string
+                        description: Tags are tags to apply to the AWS Secrets Manager
+                          secret
+                        type: object
+                    required:
+                    - region
+                    type: object
+                  infisical:
+                    description: |-
+                      Infisical stores credentials in Infisical Cloud (or self-hosted)
+                      via Universal Auth.
+                    properties:
+                      authSecretRef:
+                        description: |-
+                          AuthSecretRef references a Kubernetes Secret in the same namespace
+                          as the Database holding clientId/clientSecret keys for Infisical
+                          Universal Auth.
+                        properties:
+                          name:
+                            description: Name of the Secret.
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      environmentSlug:
+                        description: EnvironmentSlug is the Infisical environment
+                          slug (e.g. dev, prod).
+                        type: string
+                      hostAPI:
+                        default: https://app.infisical.com
+                        description: 'HostAPI is the Infisical API endpoint. Default:
+                          https://app.infisical.com'
+                        type: string
+                      projectSlug:
+                        description: ProjectSlug is the Infisical project slug.
+                        type: string
+                      secretsPath:
+                        default: /
+                        description: 'SecretsPath is the path inside the environment.
+                          Default: "/"'
+                        type: string
+                    required:
+                    - authSecretRef
+                    - environmentSlug
+                    - projectSlug
+                    type: object
+                  kubernetes:
+                    description: Kubernetes stores credentials as a Kubernetes Secret.
+                    properties:
+                      namespace:
+                        description: |-
+                          Namespace the Secret is created in. Defaults to the namespace of
+                          the Database resource.
+                        type: string
+                    type: object
+                type: object
               secretName:
                 description: |-
-                  SecretName is the name/path for storing the created credentials in AWS Secrets Manager
-                  Defaults to rds/<engine>/<databaseName>
+                  SecretName is the name/path used by the chosen SecretBackend for the
+                  generated user credentials. For AWS this is the Secrets Manager
+                  secret name; for Kubernetes the Secret name; for Infisical the path
+                  inside the configured environment. Defaults to rds/<engine>/<databaseName>.
                 type: string
               secretTemplate:
                 description: |-
@@ -241,8 +296,10 @@ spec:
                 pattern: ^[a-z][a-z0-9_]*$
                 type: string
             required:
+            - connectionString
             - databaseName
             - engine
+            - secretBackend
             type: object
           status:
             description: DatabaseStatus defines the observed state of Database
