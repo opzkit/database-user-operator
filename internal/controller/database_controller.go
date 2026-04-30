@@ -220,25 +220,17 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 
 	var password string
 
-	// If only updating secret format (user/db already exist), retrieve existing password from AWS
+	// If only updating secret format (user/db already exist), retrieve existing password from the configured backend.
 	if needsSecretUpdate && db.Status.UserCreated && db.Status.DatabaseCreated && db.Status.SecretCreated {
-		region := r.getRegion(db)
+		logger.Info("Retrieving existing password from secret backend for format migration",
+			"secretName", db.Status.ActualSecretName)
 
-		// Validate region
-		if err := secrets.ValidateRegion(region); err != nil {
-			return fmt.Errorf("invalid AWS region for password retrieval: %w", err)
-		}
-
-		logger.Info("Retrieving existing password from AWS Secrets Manager for format migration",
-			"secretName", db.Status.ActualSecretName,
-			"region", region)
-
-		awsClient, err := secrets.NewAWSSecretsManagerClient(ctx, region)
+		backend, err := secrets.NewBackend(ctx, db, r.Client)
 		if err != nil {
-			return fmt.Errorf("failed to create AWS client for password retrieval: %w", err)
+			return fmt.Errorf("failed to construct secret backend for password retrieval: %w", err)
 		}
 
-		existingSecret, err := awsClient.GetSecret(ctx, db.Status.ActualSecretName)
+		existingSecret, err := backend.Get(ctx, db.Status.ActualSecretName)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve existing secret for migration: %w", err)
 		}
@@ -261,28 +253,19 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 			return fmt.Errorf("failed to check if database exists: %w", err)
 		}
 
-		// Check if secret exists in AWS Secrets Manager
+		// Check if the destination secret already exists.
 		var secretExists bool
-		var awsClient *secrets.AWSSecretsManagerClient
 		region := r.getRegion(db)
 
-		// Validate region
-		if err := secrets.ValidateRegion(region); err != nil {
-			return fmt.Errorf("invalid AWS region: %w", err)
-		}
-
-		awsClient, err = secrets.NewAWSSecretsManagerClient(ctx, region)
+		backend, err := secrets.NewBackend(ctx, db, r.Client)
 		if err != nil {
-			return fmt.Errorf("failed to create AWS client: %w", err)
+			return fmt.Errorf("failed to construct secret backend: %w", err)
 		}
-
-		// Get the actual resolved region from the AWS client
-		region = awsClient.GetRegion()
 
 		// Determine secret name
 		secretName := getSecretNameOrDefault(db)
 
-		secretExists, err = awsClient.SecretExists(ctx, secretName)
+		secretExists, err = backend.Exists(ctx, secretName)
 		if err != nil {
 			return fmt.Errorf("failed to check if secret exists: %w", err)
 		}
@@ -302,7 +285,7 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 				"secretName", secretName)
 
 			// Retrieve password from secret for grant operations
-			existingSecret, err := awsClient.GetSecret(ctx, secretName)
+			existingSecret, err := backend.Get(ctx, secretName)
 			if err != nil {
 				return fmt.Errorf("failed to retrieve existing secret: %w", err)
 			}
@@ -311,46 +294,18 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 				return fmt.Errorf("could not extract password from existing secret")
 			}
 
-			// Always update tags to ensure they're in sync with spec
+			// Always update tags/labels to ensure they're in sync with spec
 			desiredTags := map[string]string{"ManagedBy": "database-user-operator"}
 			if db.Spec.SecretBackend.AWS != nil {
 				for k, v := range db.Spec.SecretBackend.AWS.Tags {
 					desiredTags[k] = v
 				}
 			}
-
-			// Get existing tags to determine what needs to be removed
-			existingTags, err := awsClient.GetSecretTags(ctx, secretName)
-			if err != nil {
-				logger.Error(err, "Failed to get existing secret tags, will still attempt to update tags",
-					"secretName", secretName)
-				existingTags = map[string]string{} // Continue with empty set
-			}
-
-			// Determine tags to remove (exist but not in desired)
-			var tagsToRemove []string
-			for existingKey := range existingTags {
-				if _, desired := desiredTags[existingKey]; !desired {
-					tagsToRemove = append(tagsToRemove, existingKey)
-				}
-			}
-
-			// Remove unwanted tags
-			if len(tagsToRemove) > 0 {
-				logger.Info("Removing tags from secret in AWS Secrets Manager",
-					"secretName", secretName,
-					"tagsToRemove", tagsToRemove)
-				if err := awsClient.UntagSecret(ctx, secretName, tagsToRemove); err != nil {
-					return fmt.Errorf("failed to remove secret tags: %w", err)
-				}
-			}
-
-			// Add or update desired tags
-			logger.Info("Updating secret tags in AWS Secrets Manager",
+			logger.Info("Syncing secret tags",
 				"secretName", secretName,
 				"desiredTags", desiredTags)
-			if err := awsClient.TagSecret(ctx, secretName, desiredTags); err != nil {
-				return fmt.Errorf("failed to update secret tags: %w", err)
+			if err := backend.SyncTags(ctx, secretName, desiredTags); err != nil {
+				return fmt.Errorf("failed to sync secret tags: %w", err)
 			}
 
 			// Update status
@@ -532,26 +487,16 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 	secretName := getSecretNameOrDefault(db)
 	db.Status.ActualSecretName = secretName
 
-	// Determine region: use awsSecretsManager.region if set, otherwise use connectionStringAWSSecretRef.region
+	// AWS-specific: detect region change between previously-stored
+	// locator (an ARN that carries the region) and the new spec region.
 	region := r.getRegion(db)
-	var regionSource string
-	if db.Spec.SecretBackend.AWS != nil && db.Spec.SecretBackend.AWS.Region != "" {
-		regionSource = "spec.awsSecretsManager.region"
-	} else if db.Spec.ConnectionString.AWS != nil && db.Spec.ConnectionString.AWS.Region != "" {
-		regionSource = "spec.connectionStringAWSSecretRef.region"
-	} else {
-		regionSource = "AWS SDK default (environment/instance metadata)"
+	if db.Spec.SecretBackend.AWS != nil {
+		if err := secrets.ValidateRegion(region); err != nil {
+			return fmt.Errorf("invalid AWS region: %w", err)
+		}
 	}
-
-	// Validate region
-	if err := secrets.ValidateRegion(region); err != nil {
-		return fmt.Errorf("invalid AWS region: %w", err)
-	}
-
-	// Detect region changes by reading the previously-used region from
-	// the stored ARN locator (AWS-specific format).
 	oldRegion := secrets.AWSRegionFromARN(db.Status.SecretLocator)
-	regionChanged := oldRegion != "" && oldRegion != region
+	regionChanged := db.Spec.SecretBackend.AWS != nil && oldRegion != "" && oldRegion != region
 	if regionChanged {
 		logger.Info("Region change detected - secret will be created in new region",
 			"database", db.Spec.DatabaseName,
@@ -562,40 +507,28 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 	}
 
 	if isMigration {
-		logger.Info("Migrating secret to new format in AWS Secrets Manager",
+		logger.Info("Migrating secret to new format",
 			"database", db.Spec.DatabaseName,
-			"secretName", secretName,
-			"region", region,
-			"regionSource", regionSource)
+			"secretName", secretName)
 	} else {
-		logger.Info("Storing credentials in AWS Secrets Manager",
+		logger.Info("Storing credentials in secret backend",
 			"database", db.Spec.DatabaseName,
 			"secretName", secretName,
-			"region", region,
-			"regionSource", regionSource,
 			"username", username)
 	}
-	awsClient, err := secrets.NewAWSSecretsManagerClient(ctx, region)
+
+	backend, err := secrets.NewBackend(ctx, db, r.Client)
 	if err != nil {
-		return fmt.Errorf("failed to create AWS Secrets Manager client for storing credentials (ensure pod has AWS permissions via IRSA, instance profile, or credentials): %w", err)
+		return fmt.Errorf("failed to construct secret backend: %w", err)
 	}
 
-	// Get the actual resolved region from the AWS client
-	// This is important when region is "" (using AWS SDK default resolution)
-	region = awsClient.GetRegion()
-	logger.Info("AWS client created with resolved region",
-		"database", db.Spec.DatabaseName,
-		"resolvedRegion", region,
-		"regionSource", regionSource)
-
-	// Check if secret exists in the target region
-	exists, err := awsClient.SecretExists(ctx, secretName)
+	exists, err := backend.Exists(ctx, secretName)
 	if err != nil {
 		return err
 	}
 
-	// If region changed and secret doesn't exist in new region, check old region
-	if regionChanged && !exists && oldRegion != "" {
+	// If region changed and secret doesn't exist in new region, check old region (AWS-specific).
+	if regionChanged && !exists {
 		logger.Info("Checking for secret in old region",
 			"secretName", secretName,
 			"oldRegion", oldRegion)
@@ -619,20 +552,20 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 		}
 	}
 
-	var secretARN, versionID string
+	var secretLocator, versionID string
 	createSecret := !exists
 
 	if exists {
 		if isMigration {
-			logger.Info("Updating existing secret with new format (v2) in AWS Secrets Manager",
+			logger.Info("Updating existing secret with new format (v2)",
 				"database", db.Spec.DatabaseName,
 				"secretName", secretName)
 		} else {
-			logger.Info("Updating existing secret in AWS Secrets Manager",
+			logger.Info("Updating existing secret",
 				"database", db.Spec.DatabaseName,
 				"secretName", secretName)
 		}
-		versionID, err = awsClient.UpdateSecretWithTemplate(ctx, secretName, secretValue, db.Spec.SecretTemplate)
+		versionID, err = backend.Update(ctx, secretName, secretValue, db.Spec.SecretTemplate)
 		if err != nil {
 			// Check if secret was deleted externally
 			var notFoundErr *secrets.SecretNotFoundError
@@ -641,7 +574,7 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 					"secretName", secretName)
 				createSecret = true
 			} else {
-				// Check if secret is marked for deletion
+				// Check if secret is marked for deletion (AWS-only)
 				var markedForDeletionErr *secrets.SecretMarkedForDeletionError
 				if errors.As(err, &markedForDeletionErr) {
 					logger.Info("Secret is marked for deletion in AWS Secrets Manager, will create new secret",
@@ -654,22 +587,20 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 		}
 
 		if !createSecret {
-			secretARN, _ = awsClient.GetSecretARN(ctx, secretName)
+			secretLocator, _ = backend.Locator(ctx, secretName)
 			if isMigration {
-				logger.Info("Secret migrated successfully to v2 format in AWS Secrets Manager",
+				logger.Info("Secret migrated successfully to v2 format",
 					"database", db.Spec.DatabaseName,
 					"secretName", secretName,
-					"secretARN", secretARN,
+					"secretLocator", secretLocator,
 					"versionID", versionID,
-					"region", region,
 					"format", "v2 (DB_HOST, DB_PORT, DB_NAME, DB_USERNAME, DB_PASSWORD, POSTGRES_URL)")
 			} else {
-				logger.Info("Secret updated successfully in AWS Secrets Manager",
+				logger.Info("Secret updated successfully",
 					"database", db.Spec.DatabaseName,
 					"secretName", secretName,
-					"secretARN", secretARN,
-					"versionID", versionID,
-					"region", region)
+					"secretLocator", secretLocator,
+					"versionID", versionID)
 			}
 		}
 	}
@@ -685,92 +616,60 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 				tags[k] = v
 			}
 		}
-		logger.Info("Creating new secret in AWS Secrets Manager",
+		logger.Info("Creating new secret in backend",
 			"database", db.Spec.DatabaseName,
 			"secretName", secretName,
 			"description", description)
-		secretARN, versionID, err = awsClient.CreateSecretWithTemplate(ctx, secretName, description, secretValue, tags, db.Spec.SecretTemplate)
+		secretLocator, versionID, err = backend.Create(ctx, secretName, description, secretValue, tags, db.Spec.SecretTemplate)
 		if err != nil {
 			return err
 		}
-		logger.Info("Secret created successfully in AWS Secrets Manager",
+		logger.Info("Secret created successfully",
 			"database", db.Spec.DatabaseName,
 			"secretName", secretName,
-			"secretARN", secretARN,
-			"versionID", versionID,
-			"region", region)
+			"secretLocator", secretLocator,
+			"versionID", versionID)
 	}
 
-	// Always update tags to ensure they're in sync with spec
+	// Always sync tags/labels with spec
 	desiredTags := map[string]string{"ManagedBy": "database-user-operator"}
 	if db.Spec.SecretBackend.AWS != nil {
 		for k, v := range db.Spec.SecretBackend.AWS.Tags {
 			desiredTags[k] = v
 		}
 	}
-
-	// Get existing tags to determine what needs to be removed
-	existingTags, err := awsClient.GetSecretTags(ctx, secretName)
-	if err != nil {
-		logger.Error(err, "Failed to get existing secret tags, will still attempt to update tags",
-			"secretName", secretName)
-		existingTags = map[string]string{} // Continue with empty set
-	}
-
-	// Determine tags to remove (exist but not in desired)
-	var tagsToRemove []string
-	for existingKey := range existingTags {
-		if _, desired := desiredTags[existingKey]; !desired {
-			tagsToRemove = append(tagsToRemove, existingKey)
-		}
-	}
-
-	// Remove unwanted tags
-	if len(tagsToRemove) > 0 {
-		logger.Info("Removing tags from secret in AWS Secrets Manager",
-			"secretName", secretName,
-			"tagsToRemove", tagsToRemove)
-		if err := awsClient.UntagSecret(ctx, secretName, tagsToRemove); err != nil {
-			return fmt.Errorf("failed to remove secret tags: %w", err)
-		}
-	}
-
-	// Add or update desired tags
-	logger.Info("Updating secret tags in AWS Secrets Manager",
+	logger.Info("Syncing secret tags",
 		"secretName", secretName,
 		"desiredTags", desiredTags)
-	if err := awsClient.TagSecret(ctx, secretName, desiredTags); err != nil {
-		return fmt.Errorf("failed to update secret tags: %w", err)
+	if err := backend.SyncTags(ctx, secretName, desiredTags); err != nil {
+		return fmt.Errorf("failed to sync secret tags: %w", err)
 	}
 
-	// If region changed, delete secret from old region ONLY after successful creation in new region
-	// Only delete if we have a valid secretARN (confirming successful creation in new region)
-	if regionChanged && oldRegion != "" && secretARN != "" {
+	// AWS-specific: if region changed, delete the secret from the old
+	// region ONLY after a successful create/update in the new region.
+	if regionChanged && secretLocator != "" {
 		logger.Info("Deleting secret from old region after successful migration",
 			"secretName", secretName,
 			"oldRegion", oldRegion,
 			"newRegion", region,
-			"newSecretARN", secretARN)
+			"newSecretLocator", secretLocator)
 
 		oldRegionClient, err := secrets.NewAWSSecretsManagerClient(ctx, oldRegion)
 		if err != nil {
 			logger.Error(err, "Failed to create AWS client for old region to delete secret",
 				"oldRegion", oldRegion,
 				"warning", "Secret may still exist in old region and should be manually deleted")
+		} else if err := oldRegionClient.DeleteSecret(ctx, secretName, true); err != nil {
+			logger.Error(err, "Failed to delete secret from old region",
+				"oldRegion", oldRegion,
+				"secretName", secretName,
+				"warning", "Secret may still exist in old region and should be manually deleted")
 		} else {
-			// Use force delete to remove immediately without recovery window
-			if err := oldRegionClient.DeleteSecret(ctx, secretName, true); err != nil {
-				logger.Error(err, "Failed to delete secret from old region",
-					"oldRegion", oldRegion,
-					"secretName", secretName,
-					"warning", "Secret may still exist in old region and should be manually deleted")
-			} else {
-				logger.Info("Successfully deleted secret from old region",
-					"secretName", secretName,
-					"oldRegion", oldRegion)
-			}
+			logger.Info("Successfully deleted secret from old region",
+				"secretName", secretName,
+				"oldRegion", oldRegion)
 		}
-	} else if regionChanged && oldRegion != "" && secretARN == "" {
+	} else if regionChanged && secretLocator == "" {
 		logger.Error(nil, "Region changed but secret not successfully created in new region - keeping secret in old region",
 			"oldRegion", oldRegion,
 			"newRegion", region,
@@ -778,7 +677,7 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 	}
 
 	db.Status.SecretCreated = true
-	db.Status.SecretLocator = secretARN
+	db.Status.SecretLocator = secretLocator
 	db.Status.SecretVersion = versionID
 	db.Status.SecretFormatVersion = "v2"
 	db.Status.ConnectionInfo = databasev1alpha1.ConnectionInfo{
@@ -892,52 +791,28 @@ func (r *DatabaseReconciler) reconcileDelete(ctx context.Context, db *databasev1
 			}
 		}
 
-		// Delete credentials from AWS Secrets Manager
-		// Try to delete even if status doesn't indicate creation, as the secret might exist
-		region := r.getRegion(db)
-
-		// Validate region
-		if err := secrets.ValidateRegion(region); err != nil {
-			logger.Error(err, "Invalid AWS region for secret deletion")
-			cleanupErrors = append(cleanupErrors, fmt.Errorf("invalid AWS region %s: %w", region, err))
+		// Delete credentials from the configured backend.
+		// Try to delete even if status doesn't indicate creation, as the secret might exist.
+		backend, err := secrets.NewBackend(ctx, db, r.Client)
+		if err != nil {
+			logger.Error(err, "Failed to construct secret backend for deletion")
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to construct secret backend: %w", err))
 		} else {
-			awsClient, err := secrets.NewAWSSecretsManagerClient(ctx, region)
-			if err != nil {
-				logger.Error(err, "Failed to create AWS Secrets Manager client for deletion",
-					"region", region)
-				cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to create AWS client: %w", err))
+			secretName := db.Status.ActualSecretName
+			if secretName == "" {
+				secretName = getSecretNameOrDefault(db)
+			}
+
+			logger.Info("Deleting secret from backend", "secretName", secretName)
+
+			if err := backend.Delete(ctx, secretName, true); err != nil {
+				logger.Error(err, "Failed to delete secret from backend",
+					"secretName", secretName)
+				cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to delete secret %s: %w", secretName, err))
 			} else {
-				// Get the actual resolved region
-				region = awsClient.GetRegion()
-
-				// Determine the secret name to delete
-				secretName := db.Status.ActualSecretName
-				if secretName == "" {
-					secretName = getSecretNameOrDefault(db)
-				}
-
-				logger.Info("Deleting secret from AWS Secrets Manager",
-					"secretName", secretName,
-					"region", region)
-
-				if err := awsClient.DeleteSecret(ctx, secretName, true); err != nil {
-					// Ignore ResourceNotFoundException - secret doesn't exist, which is fine
-					if !isAWSResourceNotFoundError(err) {
-						logger.Error(err, "Failed to delete secret from AWS Secrets Manager",
-							"secretName", secretName,
-							"region", region)
-						cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to delete secret %s: %w", secretName, err))
-					} else {
-						logger.Info("Secret does not exist, skipping deletion",
-							"secretName", secretName,
-							"region", region)
-					}
-				} else {
-					secretDeleted = true
-					logger.Info("Secret deleted successfully from AWS Secrets Manager",
-						"secretName", secretName,
-						"region", region)
-				}
+				secretDeleted = true
+				logger.Info("Secret deleted successfully from backend",
+					"secretName", secretName)
 			}
 		}
 
@@ -1123,44 +998,8 @@ func getSecretNameOrDefault(db *databasev1alpha1.Database) string {
 	return fmt.Sprintf("rds/%s/%s", db.Spec.Engine, db.Spec.DatabaseName)
 }
 
-// tagsEqual compares two tag maps and returns true if they are equal
-func tagsEqual(a, b map[string]string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k, v := range a {
-		if b[k] != v {
-			return false
-		}
-	}
-	return true
-}
-
-// getTagsToRemove returns tags that exist in current but not in desired
-func getTagsToRemove(current, desired map[string]string) []string {
-	var toRemove []string
-	for key := range current {
-		if _, exists := desired[key]; !exists {
-			toRemove = append(toRemove, key)
-		}
-	}
-	return toRemove
-}
-
-// getTagsToAdd returns tags that are in desired but missing or different in current
-func getTagsToAdd(current, desired map[string]string) map[string]string {
-	toAdd := make(map[string]string)
-	for key, desiredValue := range desired {
-		currentValue, exists := current[key]
-		if !exists || currentValue != desiredValue {
-			toAdd[key] = desiredValue
-		}
-	}
-	return toAdd
-}
-
-// getRegion determines the AWS region from the Database spec
-// Priority: spec.awsSecretsManager.region > spec.connectionStringAWSSecretRef.region > empty (AWS SDK default)
+// getRegion determines the AWS region from the Database spec.
+// Priority: spec.secretBackend.aws.region > spec.connectionString.aws.region > empty (AWS SDK default).
 func (r *DatabaseReconciler) getRegion(db *databasev1alpha1.Database) string {
 	if db.Spec.SecretBackend.AWS != nil && db.Spec.SecretBackend.AWS.Region != "" {
 		return db.Spec.SecretBackend.AWS.Region
