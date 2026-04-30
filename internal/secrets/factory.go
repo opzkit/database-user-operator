@@ -11,6 +11,8 @@ import (
 	"context"
 	"errors"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	databasev1alpha1 "opzkit/database-user-operator/api/v1alpha1"
 )
 
@@ -26,7 +28,11 @@ var ErrMultipleBackendsConfigured = errors.New("spec.secretBackend has multiple 
 // which spec.secretBackend.* field is populated. Returns
 // ErrMultipleBackendsConfigured / ErrNoBackendConfigured if zero or
 // more than one backend is set.
-func NewBackend(ctx context.Context, db *databasev1alpha1.Database) (Backend, error) {
+//
+// k8sClient is used by the Kubernetes Secret backend to read/write
+// Secrets in the cluster; the AWS backend ignores it. It is required
+// to be non-nil when spec.secretBackend.kubernetes is set.
+func NewBackend(ctx context.Context, db *databasev1alpha1.Database, k8sClient client.Client) (Backend, error) {
 	sb := db.Spec.SecretBackend
 
 	count := 0
@@ -53,8 +59,16 @@ func NewBackend(ctx context.Context, db *databasev1alpha1.Database) (Backend, er
 		}
 		return NewAWSSecretsManagerClient(ctx, sb.AWS.Region)
 
-	// Phase 2:
-	//   case sb.Kubernetes != nil: return NewKubernetesBackend(...)
+	case sb.Kubernetes != nil:
+		if k8sClient == nil {
+			return nil, errors.New("kubernetes secret backend requires a non-nil k8s client")
+		}
+		namespace := sb.Kubernetes.Namespace
+		if namespace == "" {
+			namespace = db.Namespace
+		}
+		return NewKubernetesBackend(k8sClient, namespace), nil
+
 	// Phase 3:
 	//   case sb.Infisical != nil:  return NewInfisicalBackend(...)
 
