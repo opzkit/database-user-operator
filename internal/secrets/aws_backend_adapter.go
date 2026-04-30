@@ -10,7 +10,22 @@ package secrets
 import (
 	"context"
 	"fmt"
+	"strings"
 )
+
+// AWSRegionFromARN extracts the region from an AWS ARN. Returns "" if
+// the locator isn't a recognisable AWS ARN. Used by the controller to
+// derive the previously-used region from a stored Status.SecretLocator
+// without keeping a separate AWS-specific status field.
+//
+// AWS ARN format: arn:<partition>:<service>:<region>:<account-id>:<resource>
+func AWSRegionFromARN(arn string) string {
+	parts := strings.Split(arn, ":")
+	if len(parts) >= 6 && parts[0] == "arn" {
+		return parts[3]
+	}
+	return ""
+}
 
 // This file adapts the existing AWSSecretsManagerClient to the generic
 // Backend interface. Existing methods (SecretExists, GetSecretARN,

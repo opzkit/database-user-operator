@@ -29,8 +29,9 @@ spec:
     - jsonPath: .status.actualSecretName
       name: SecretName
       type: string
-    - jsonPath: .status.secretRegion
-      name: Region
+    - jsonPath: .status.secretLocator
+      name: Locator
+      priority: 1
       type: string
     - jsonPath: .status.phase
       name: Phase
@@ -360,10 +361,6 @@ spec:
                   Phase represents the current phase of the Database
                   Possible values: Pending, Creating, Ready, Failed, Deleting
                 type: string
-              secretARN:
-                description: SecretARN is the ARN of the created AWS Secrets Manager
-                  secret (if applicable)
-                type: string
               secretCreated:
                 description: SecretCreated indicates whether the secret has been created
                 type: boolean
@@ -371,8 +368,12 @@ spec:
                 description: SecretFormatVersion tracks the secret structure version
                   (v1=old format, v2=new format with DB_HOST, etc.)
                 type: string
-              secretRegion:
-                description: SecretRegion is the AWS region where the secret is stored
+              secretLocator:
+                description: |-
+                  SecretLocator is the backend-specific identifier for the stored
+                  credential secret. For AWS Secrets Manager, this is the ARN
+                  (which carries the region). For a Kubernetes Secret it is
+                  "namespace/name". For Infisical it is the full project/env/path.
                 type: string
               secretVersion:
                 description: SecretVersion is the version ID of the secret

@@ -154,8 +154,11 @@ type DatabaseStatus struct {
 	// SecretCreated indicates whether the secret has been created
 	SecretCreated bool `json:"secretCreated,omitempty"`
 
-	// SecretARN is the ARN of the created AWS Secrets Manager secret (if applicable)
-	SecretARN string `json:"secretARN,omitempty"`
+	// SecretLocator is the backend-specific identifier for the stored
+	// credential secret. For AWS Secrets Manager, this is the ARN
+	// (which carries the region). For a Kubernetes Secret it is
+	// "namespace/name". For Infisical it is the full project/env/path.
+	SecretLocator string `json:"secretLocator,omitempty"`
 
 	// SecretVersion is the version ID of the secret
 	SecretVersion string `json:"secretVersion,omitempty"`
@@ -168,9 +171,6 @@ type DatabaseStatus struct {
 
 	// ActualSecretName is the actual secret name that was created
 	ActualSecretName string `json:"actualSecretName,omitempty"`
-
-	// SecretRegion is the AWS region where the secret is stored
-	SecretRegion string `json:"secretRegion,omitempty"`
 
 	// ConnectionInfo provides non-sensitive connection information
 	ConnectionInfo ConnectionInfo `json:"connectionInfo,omitempty"`
@@ -201,7 +201,7 @@ type ConnectionInfo struct {
 // +kubebuilder:printcolumn:name="Database",type=string,JSONPath=`.spec.databaseName`
 // +kubebuilder:printcolumn:name="Username",type=string,JSONPath=`.status.actualUsername`
 // +kubebuilder:printcolumn:name="SecretName",type=string,JSONPath=`.status.actualSecretName`
-// +kubebuilder:printcolumn:name="Region",type=string,JSONPath=`.status.secretRegion`
+// +kubebuilder:printcolumn:name="Locator",type=string,priority=1,JSONPath=`.status.secretLocator`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 

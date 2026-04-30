@@ -160,7 +160,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		"database", db.Spec.DatabaseName,
 		"username", db.Status.ActualUsername,
 		"secretName", db.Status.ActualSecretName,
-		"secretARN", db.Status.SecretARN,
+		"secretLocator", db.Status.SecretLocator,
 		"requeueAfter", requeueAfterSuccess)
 	return ctrl.Result{RequeueAfter: requeueAfterSuccess}, nil
 }
@@ -362,19 +362,21 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 
 		} else if (dbExists || userExists) && !secretExists {
 			// Database and/or user exist but secret is missing
-			// Check if this is a region change scenario
-			regionChanged := db.Status.SecretRegion != "" && db.Status.SecretRegion != region
+			// Check if this is a region change scenario (AWS-specific:
+			// derive the previously-used region from the stored locator).
+			oldRegion := secrets.AWSRegionFromARN(db.Status.SecretLocator)
+			regionChanged := oldRegion != "" && oldRegion != region
 
 			if regionChanged && db.Status.ActualSecretName != "" {
 				logger.Info("Region change detected - attempting to retrieve password from old region",
-					"oldRegion", db.Status.SecretRegion,
+					"oldRegion", oldRegion,
 					"newRegion", region,
 					"secretName", db.Status.ActualSecretName)
 
 				// Try to get password from old region
-				oldRegionClient, err := secrets.NewAWSSecretsManagerClient(ctx, db.Status.SecretRegion)
+				oldRegionClient, err := secrets.NewAWSSecretsManagerClient(ctx, oldRegion)
 				if err != nil {
-					return fmt.Errorf("failed to create AWS client for old region (%s): %w", db.Status.SecretRegion, err)
+					return fmt.Errorf("failed to create AWS client for old region (%s): %w", oldRegion, err)
 				}
 
 				oldSecretExists, err := oldRegionClient.SecretExists(ctx, db.Status.ActualSecretName)
@@ -384,12 +386,12 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 
 				if oldSecretExists {
 					logger.Info("Found secret in old region, retrieving password",
-						"oldRegion", db.Status.SecretRegion,
+						"oldRegion", oldRegion,
 						"secretName", db.Status.ActualSecretName)
 
 					oldSecret, err := oldRegionClient.GetSecret(ctx, db.Status.ActualSecretName)
 					if err != nil {
-						return fmt.Errorf("failed to retrieve secret from old region (%s): %w", db.Status.SecretRegion, err)
+						return fmt.Errorf("failed to retrieve secret from old region (%s): %w", oldRegion, err)
 					}
 
 					password = oldSecret.DBPassword
@@ -398,7 +400,7 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 					}
 
 					logger.Info("Successfully retrieved password from old region, will create secret in new region",
-						"oldRegion", db.Status.SecretRegion,
+						"oldRegion", oldRegion,
 						"newRegion", region)
 
 					// Update status to reflect we have the resources
@@ -409,7 +411,7 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 					// Note: SecretCreated will remain false until we actually create it in the new region
 				} else {
 					return fmt.Errorf("region changed from %s to %s but secret not found in old region - cannot recover password. Please delete the Database CR and recreate it, or manually create the secret with the correct password",
-						db.Status.SecretRegion, region)
+						oldRegion, region)
 				}
 			} else {
 				// Not a region change - this is an unrecoverable error
@@ -546,15 +548,17 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 		return fmt.Errorf("invalid AWS region: %w", err)
 	}
 
-	// Detect region changes
-	regionChanged := db.Status.SecretRegion != "" && db.Status.SecretRegion != region
+	// Detect region changes by reading the previously-used region from
+	// the stored ARN locator (AWS-specific format).
+	oldRegion := secrets.AWSRegionFromARN(db.Status.SecretLocator)
+	regionChanged := oldRegion != "" && oldRegion != region
 	if regionChanged {
 		logger.Info("Region change detected - secret will be created in new region",
 			"database", db.Spec.DatabaseName,
 			"secretName", secretName,
-			"oldRegion", db.Status.SecretRegion,
+			"oldRegion", oldRegion,
 			"newRegion", region,
-			"warning", fmt.Sprintf("Secret may still exist in old region (%s) and should be manually deleted if no longer needed", db.Status.SecretRegion))
+			"warning", fmt.Sprintf("Secret may still exist in old region (%s) and should be manually deleted if no longer needed", oldRegion))
 	}
 
 	if isMigration {
@@ -591,26 +595,26 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 	}
 
 	// If region changed and secret doesn't exist in new region, check old region
-	if regionChanged && !exists && db.Status.SecretRegion != "" {
+	if regionChanged && !exists && oldRegion != "" {
 		logger.Info("Checking for secret in old region",
 			"secretName", secretName,
-			"oldRegion", db.Status.SecretRegion)
+			"oldRegion", oldRegion)
 
-		oldRegionClient, err := secrets.NewAWSSecretsManagerClient(ctx, db.Status.SecretRegion)
+		oldRegionClient, err := secrets.NewAWSSecretsManagerClient(ctx, oldRegion)
 		if err != nil {
 			logger.Error(err, "Failed to create client for old region",
-				"oldRegion", db.Status.SecretRegion)
+				"oldRegion", oldRegion)
 		} else {
 			oldExists, err := oldRegionClient.SecretExists(ctx, secretName)
 			if err != nil {
 				logger.Error(err, "Failed to check secret in old region",
-					"oldRegion", db.Status.SecretRegion)
+					"oldRegion", oldRegion)
 			} else if oldExists {
 				logger.Info("Secret exists in old region - will create in new region",
 					"secretName", secretName,
-					"oldRegion", db.Status.SecretRegion,
+					"oldRegion", oldRegion,
 					"newRegion", region,
-					"action", fmt.Sprintf("Please manually delete secret from %s if no longer needed", db.Status.SecretRegion))
+					"action", fmt.Sprintf("Please manually delete secret from %s if no longer needed", oldRegion))
 			}
 		}
 	}
@@ -741,43 +745,42 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 
 	// If region changed, delete secret from old region ONLY after successful creation in new region
 	// Only delete if we have a valid secretARN (confirming successful creation in new region)
-	if regionChanged && db.Status.SecretRegion != "" && secretARN != "" {
+	if regionChanged && oldRegion != "" && secretARN != "" {
 		logger.Info("Deleting secret from old region after successful migration",
 			"secretName", secretName,
-			"oldRegion", db.Status.SecretRegion,
+			"oldRegion", oldRegion,
 			"newRegion", region,
 			"newSecretARN", secretARN)
 
-		oldRegionClient, err := secrets.NewAWSSecretsManagerClient(ctx, db.Status.SecretRegion)
+		oldRegionClient, err := secrets.NewAWSSecretsManagerClient(ctx, oldRegion)
 		if err != nil {
 			logger.Error(err, "Failed to create AWS client for old region to delete secret",
-				"oldRegion", db.Status.SecretRegion,
+				"oldRegion", oldRegion,
 				"warning", "Secret may still exist in old region and should be manually deleted")
 		} else {
 			// Use force delete to remove immediately without recovery window
 			if err := oldRegionClient.DeleteSecret(ctx, secretName, true); err != nil {
 				logger.Error(err, "Failed to delete secret from old region",
-					"oldRegion", db.Status.SecretRegion,
+					"oldRegion", oldRegion,
 					"secretName", secretName,
 					"warning", "Secret may still exist in old region and should be manually deleted")
 			} else {
 				logger.Info("Successfully deleted secret from old region",
 					"secretName", secretName,
-					"oldRegion", db.Status.SecretRegion)
+					"oldRegion", oldRegion)
 			}
 		}
-	} else if regionChanged && db.Status.SecretRegion != "" && secretARN == "" {
+	} else if regionChanged && oldRegion != "" && secretARN == "" {
 		logger.Error(nil, "Region changed but secret not successfully created in new region - keeping secret in old region",
-			"oldRegion", db.Status.SecretRegion,
+			"oldRegion", oldRegion,
 			"newRegion", region,
 			"secretName", secretName)
 	}
 
 	db.Status.SecretCreated = true
-	db.Status.SecretARN = secretARN
+	db.Status.SecretLocator = secretARN
 	db.Status.SecretVersion = versionID
 	db.Status.SecretFormatVersion = "v2"
-	db.Status.SecretRegion = region
 	db.Status.ConnectionInfo = databasev1alpha1.ConnectionInfo{
 		Host:     connInfo.Host,
 		Port:     port,
@@ -958,7 +961,7 @@ func (r *DatabaseReconciler) reconcileDelete(ctx context.Context, db *databasev1
 			"database", db.Spec.DatabaseName,
 			"username", db.Status.ActualUsername,
 			"secretName", db.Status.ActualSecretName,
-			"secretARN", db.Status.SecretARN,
+			"secretLocator", db.Status.SecretLocator,
 			"databaseRetained", db.Status.DatabaseCreated,
 			"userRetained", db.Status.UserCreated,
 			"secretRetained", db.Status.SecretCreated)
