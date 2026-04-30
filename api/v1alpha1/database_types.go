@@ -125,33 +125,35 @@ type KubernetesSecretBackend struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-// InfisicalSecretBackend stores generated credentials in Infisical via
-// Universal Auth. The clientId/clientSecret pair is read from a
-// Kubernetes Secret referenced by AuthSecretRef; the API uses
-// HostAPI / ProjectSlug / EnvironmentSlug / SecretsPath to address the
-// target.
+// InfisicalSecretBackend stores generated credentials in Infisical
+// (Cloud or self-hosted) via Universal Auth.
+//
+// The Infisical V3 secrets API requires a project UUID for
+// create/update/delete operations, so we expose ProjectID rather than
+// the slug used elsewhere (e.g. the ESO ClusterSecretStore). Find the
+// UUID in the Infisical UI under Project Settings.
 type InfisicalSecretBackend struct {
 	// HostAPI is the Infisical API endpoint. Default: https://app.infisical.com
 	// +optional
 	// +kubebuilder:default="https://app.infisical.com"
 	HostAPI string `json:"hostAPI,omitempty"`
 
-	// ProjectSlug is the Infisical project slug.
+	// ProjectID is the Infisical project UUID.
 	// +kubebuilder:validation:Required
-	ProjectSlug string `json:"projectSlug"`
+	ProjectID string `json:"projectID"`
 
-	// EnvironmentSlug is the Infisical environment slug (e.g. dev, prod).
+	// Environment is the Infisical environment slug (e.g. dev, staging, prod).
 	// +kubebuilder:validation:Required
-	EnvironmentSlug string `json:"environmentSlug"`
+	Environment string `json:"environment"`
 
-	// SecretsPath is the path inside the environment. Default: "/"
+	// SecretsPath is the folder path inside the environment. Default: "/"
 	// +optional
 	// +kubebuilder:default="/"
 	SecretsPath string `json:"secretsPath,omitempty"`
 
 	// AuthSecretRef references a Kubernetes Secret in the same namespace
-	// as the Database holding clientId/clientSecret keys for Infisical
-	// Universal Auth.
+	// as the Database holding `clientId` and `clientSecret` keys for
+	// Infisical Universal Auth.
 	// +kubebuilder:validation:Required
 	AuthSecretRef KubernetesSecretRef `json:"authSecretRef"`
 }

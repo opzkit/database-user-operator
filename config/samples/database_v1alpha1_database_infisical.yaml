@@ -1,0 +1,35 @@
+# Bootstrap Secret holding the Infisical Universal Auth credentials.
+# Create this once per namespace by hand (or via your secrets bootstrap
+# tool) before applying the Database below:
+#
+#   kubectl create secret generic infisical-universal-auth \
+#     --namespace myapp \
+#     --from-literal=clientId=<INFISICAL_CLIENT_ID> \
+#     --from-literal=clientSecret=<INFISICAL_CLIENT_SECRET>
+#
+---
+apiVersion: database.opzkit.io/v1alpha1
+kind: Database
+metadata:
+  name: myapp-database-infisical
+  namespace: myapp
+spec:
+  engine: postgres
+  databaseName: myapp_db
+
+  # Source of the admin DSN — read from a Secret in the cluster.
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+
+  # Generated user credentials are written to Infisical as a single
+  # secret whose value is the JSON-encoded credentials blob (matching
+  # the AWS / Kubernetes backend shape).
+  secretBackend:
+    infisical:
+      hostAPI: https://app.infisical.com   # or https://eu.infisical.com / your self-hosted URL
+      projectID: 11111111-2222-3333-4444-555555555555
+      environment: dev
+      secretsPath: /
+      authSecretRef:
+        name: infisical-universal-auth

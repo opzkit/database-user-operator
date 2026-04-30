@@ -233,8 +233,8 @@ spec:
                       authSecretRef:
                         description: |-
                           AuthSecretRef references a Kubernetes Secret in the same namespace
-                          as the Database holding clientId/clientSecret keys for Infisical
-                          Universal Auth.
+                          as the Database holding `clientId` and `clientSecret` keys for
+                          Infisical Universal Auth.
                         properties:
                           name:
                             description: Name of the Secret.
@@ -242,27 +242,27 @@ spec:
                         required:
                         - name
                         type: object
-                      environmentSlug:
-                        description: EnvironmentSlug is the Infisical environment
-                          slug (e.g. dev, prod).
+                      environment:
+                        description: Environment is the Infisical environment slug
+                          (e.g. dev, staging, prod).
                         type: string
                       hostAPI:
                         default: https://app.infisical.com
                         description: 'HostAPI is the Infisical API endpoint. Default:
                           https://app.infisical.com'
                         type: string
-                      projectSlug:
-                        description: ProjectSlug is the Infisical project slug.
+                      projectID:
+                        description: ProjectID is the Infisical project UUID.
                         type: string
                       secretsPath:
                         default: /
-                        description: 'SecretsPath is the path inside the environment.
+                        description: 'SecretsPath is the folder path inside the environment.
                           Default: "/"'
                         type: string
                     required:
                     - authSecretRef
-                    - environmentSlug
-                    - projectSlug
+                    - environment
+                    - projectID
                     type: object
                   kubernetes:
                     description: Kubernetes stores credentials as a Kubernetes Secret.
