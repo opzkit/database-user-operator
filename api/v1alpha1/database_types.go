@@ -97,6 +97,10 @@ type SecretBackend struct {
 	// via Universal Auth.
 	// +optional
 	Infisical *InfisicalSecretBackend `json:"infisical,omitempty"`
+
+	// Scaleway stores credentials in Scaleway Secret Manager.
+	// +optional
+	Scaleway *ScalewaySecretBackend `json:"scaleway,omitempty"`
 }
 
 // AWSSecretBackend contains AWS Secrets Manager configuration.
@@ -154,6 +158,45 @@ type InfisicalSecretBackend struct {
 	// AuthSecretRef references a Kubernetes Secret in the same namespace
 	// as the Database holding `clientId` and `clientSecret` keys for
 	// Infisical Universal Auth.
+	// +kubebuilder:validation:Required
+	AuthSecretRef KubernetesSecretRef `json:"authSecretRef"`
+}
+
+// ScalewaySecretBackend stores generated credentials in Scaleway Secret
+// Manager.
+//
+// Scaleway scopes secrets to a (Region, Project) pair. Authentication uses
+// a Scaleway IAM API key (access_key + secret_key) read from a Kubernetes
+// Secret in the same namespace as the Database resource. The standard
+// Scaleway IAM permission set required is `SecretManagerSecretAccess` at
+// Project scope plus `SecretManagerReadOnly` at Org scope (the latter
+// covers the list-by-name lookup the controller performs on every
+// reconcile).
+type ScalewaySecretBackend struct {
+	// Region is the Scaleway region for Secret Manager (e.g. fr-par, nl-ams, pl-waw).
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=fr-par;nl-ams;pl-waw
+	Region string `json:"region"`
+
+	// ProjectID is the Scaleway Project UUID owning the secret.
+	// +kubebuilder:validation:Required
+	ProjectID string `json:"projectID"`
+
+	// Description is the description applied to the Scaleway secret on
+	// create/update.
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// Tags are key/value tags applied to the Scaleway secret. Scaleway
+	// stores tags as a flat list of strings; the controller serialises
+	// each entry as "key=value" on update.
+	// +optional
+	Tags map[string]string `json:"tags,omitempty"`
+
+	// AuthSecretRef references a Kubernetes Secret in the same namespace
+	// as the Database holding `access_key` and `secret_key` data keys
+	// for the Scaleway IAM API key. Same shape as the Secret consumed by
+	// the Scaleway provider in External Secrets Operator.
 	// +kubebuilder:validation:Required
 	AuthSecretRef KubernetesSecretRef `json:"authSecretRef"`
 }
