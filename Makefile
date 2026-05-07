@@ -46,7 +46,7 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" GOTOOLCHAIN=go1.25.0+auto go test ./... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -203,7 +203,7 @@ merge-coverage:
 	@echo "Merging coverage data..."
 	@mkdir -p coverage
 	@echo "Converting integration test coverage..."
-	@GOTOOLCHAIN=go1.25.0+auto go tool covdata textfmt -i=/tmp/coverage -o=coverage/integration.out
+	@go tool covdata textfmt -i=/tmp/coverage -o=coverage/integration.out
 	@MODULE_PATH=$$(go list -m); \
 	sed -i.bak "s|/workspace/|$$MODULE_PATH/|g" coverage/integration.out 2>/dev/null || sed -i '' "s|/workspace/|$$MODULE_PATH/|g" coverage/integration.out
 	@rm -f coverage/integration.out.bak
