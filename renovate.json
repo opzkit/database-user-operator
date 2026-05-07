@@ -23,6 +23,17 @@
         "ghcr.io/opzkit/database-user-operator"
       ],
       "enabled": false
+    },
+    {
+      "description": "Group k8s.io/* and sigs.k8s.io/controller-runtime so they bump in lockstep (k8s 0.36 needs controller-runtime 0.24)",
+      "groupName": "kubernetes",
+      "matchDatasources": [
+        "go"
+      ],
+      "matchPackageNames": [
+        "/^k8s\\.io//",
+        "sigs.k8s.io/controller-runtime"
+      ]
     }
   ]
 }
