@@ -111,8 +111,9 @@ wait_for_deployment() {
 }
 
 # Deploy all services in parallel
-echo "Deploying PostgreSQL, MySQL, LocalStack..."
+echo "Deploying PostgreSQL (incl. version matrix 14/15/16/17/18), MySQL, LocalStack..."
 kubectl apply -f "${PROJECT_ROOT}/test/integration/manifests/postgres.yaml" &
+kubectl apply -f "${PROJECT_ROOT}/test/integration/manifests/postgres-versions.yaml" &
 kubectl apply -f "${PROJECT_ROOT}/test/integration/manifests/mysql.yaml" &
 kubectl apply -f "${PROJECT_ROOT}/test/integration/manifests/localstack.yaml" &
 wait
@@ -123,17 +124,28 @@ echo "Waiting for all deployments to be available..."
 LOG_DIR=$(mktemp -d -t deploy-wait.XXXXXX)
 trap 'rm -rf "${LOG_DIR}"' EXIT
 
-wait_for_deployment postgres databases 300 > "${LOG_DIR}/postgres.log" 2>&1 &
-PG_PID=$!
-wait_for_deployment mysql databases 300 > "${LOG_DIR}/mysql.log" 2>&1 &
-MY_PID=$!
-wait_for_deployment localstack databases 300 > "${LOG_DIR}/localstack.log" 2>&1 &
-LS_PID=$!
+declare -a WAIT_PIDS
+declare -a WAIT_NAMES
+
+start_wait() {
+    local name=$1
+    local ns=$2
+    wait_for_deployment "${name}" "${ns}" 300 > "${LOG_DIR}/${name}.log" 2>&1 &
+    WAIT_PIDS+=("$!")
+    WAIT_NAMES+=("${name}")
+}
+
+start_wait postgres databases
+for v in 14 15 16 17 18; do
+    start_wait "postgres-${v}" databases
+done
+start_wait mysql databases
+start_wait localstack databases
 
 failed=0
-for pid_name in "postgres:${PG_PID}" "mysql:${MY_PID}" "localstack:${LS_PID}"; do
-    name=${pid_name%%:*}
-    pid=${pid_name##*:}
+for i in "${!WAIT_PIDS[@]}"; do
+    name=${WAIT_NAMES[$i]}
+    pid=${WAIT_PIDS[$i]}
     if wait "${pid}"; then
         echo "  ✓ ${name}"
     else

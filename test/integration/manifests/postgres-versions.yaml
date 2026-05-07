@@ -1,0 +1,354 @@
+---
+# Per-version PostgreSQL deployments for the PG-compat integration matrix.
+# Each version gets its own Deployment, Service (ClusterIP), and admin
+# Secret in the `default` namespace consumed by spec.connectionString.kubernetes.
+# The deployments live in `databases`; the connection-string Secret lives
+# in `default` because that is the namespace the Database CR is created in
+# during the integration tests.
+#
+# Each PG instance bootstraps a NON-SUPERUSER admin role (`dbuo_admin`)
+# with CREATEDB + CREATEROLE. The PG-version-matrix test connects as
+# this role so PG 16+'s NOINHERIT / NOSET GRANT defaults are actually
+# observable. Connecting as the built-in `postgres` superuser would
+# bypass the SET ROLE check entirely, papering over the bug class this
+# matrix is meant to catch.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-versions-init
+  namespace: databases
+data:
+  init.sql: |
+    -- Non-superuser admin for the operator. Mirrors managed-PG providers
+    -- (AWS rds_superuser, Scaleway _rdb_superadmin, Aurora) where the
+    -- admin role has CREATEDB+CREATEROLE+INHERIT but not SUPERUSER, so
+    -- the SET ROLE / WITH SET grant defaults actually bite on PG 16+
+    -- while the admin still inherits ownership privileges of any role
+    -- it is granted membership in (needed for COMMENT/DROP DATABASE).
+    CREATE ROLE dbuo_admin WITH LOGIN PASSWORD 'dbuo_admin_pw' CREATEDB CREATEROLE NOSUPERUSER INHERIT;
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-14-connection
+  namespace: default
+type: Opaque
+stringData:
+  connectionString: "postgresql://dbuo_admin:dbuo_admin_pw@postgres-14.databases.svc.cluster.local:5432/postgres?sslmode=disable"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-15-connection
+  namespace: default
+type: Opaque
+stringData:
+  connectionString: "postgresql://dbuo_admin:dbuo_admin_pw@postgres-15.databases.svc.cluster.local:5432/postgres?sslmode=disable"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-16-connection
+  namespace: default
+type: Opaque
+stringData:
+  connectionString: "postgresql://dbuo_admin:dbuo_admin_pw@postgres-16.databases.svc.cluster.local:5432/postgres?sslmode=disable"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-17-connection
+  namespace: default
+type: Opaque
+stringData:
+  connectionString: "postgresql://dbuo_admin:dbuo_admin_pw@postgres-17.databases.svc.cluster.local:5432/postgres?sslmode=disable"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-18-connection
+  namespace: default
+type: Opaque
+stringData:
+  connectionString: "postgresql://dbuo_admin:dbuo_admin_pw@postgres-18.databases.svc.cluster.local:5432/postgres?sslmode=disable"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-14
+  namespace: databases
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres-14
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-15
+  namespace: databases
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres-15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-16
+  namespace: databases
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres-16
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-17
+  namespace: databases
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres-17
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-18
+  namespace: databases
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres-18
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-14
+  namespace: databases
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-14
+  template:
+    metadata:
+      labels:
+        app: postgres-14
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:14-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              value: postgres123
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+          volumeMounts:
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+      volumes:
+        - name: init-sql
+          configMap:
+            name: postgres-versions-init
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-15
+  namespace: databases
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-15
+  template:
+    metadata:
+      labels:
+        app: postgres-15
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              value: postgres123
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+          volumeMounts:
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+      volumes:
+        - name: init-sql
+          configMap:
+            name: postgres-versions-init
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-16
+  namespace: databases
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-16
+  template:
+    metadata:
+      labels:
+        app: postgres-16
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              value: postgres123
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+          volumeMounts:
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+      volumes:
+        - name: init-sql
+          configMap:
+            name: postgres-versions-init
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-17
+  namespace: databases
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-17
+  template:
+    metadata:
+      labels:
+        app: postgres-17
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              value: postgres123
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+          volumeMounts:
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+      volumes:
+        - name: init-sql
+          configMap:
+            name: postgres-versions-init
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-18
+  namespace: databases
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-18
+  template:
+    metadata:
+      labels:
+        app: postgres-18
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:18-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              value: postgres123
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+          volumeMounts:
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+      volumes:
+        - name: init-sql
+          configMap:
+            name: postgres-versions-init
