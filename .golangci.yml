@@ -10,7 +10,8 @@ formatters:
     - goimports
   settings:
     goimports:
-      local-prefixes: opzkit/database-user-operator
+      local-prefixes:
+        - opzkit/database-user-operator
 
 linters:
   # Default linters are already enabled: errcheck, govet, ineffassign, staticcheck, unused
