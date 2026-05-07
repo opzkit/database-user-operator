@@ -68,6 +68,17 @@ func (c *PostgresClient) Close() error {
 	return nil
 }
 
+// serverVersionNum returns the PostgreSQL server version as a packed
+// integer (major * 10000 + minor * 100 + patch — e.g. 160003 for 16.3).
+// PG 10+ uses major-only versioning so the minor digits are always 00.
+func (c *PostgresClient) serverVersionNum(ctx context.Context) (int, error) {
+	var v int
+	if err := c.db.QueryRowContext(ctx, "SELECT current_setting('server_version_num')::int").Scan(&v); err != nil {
+		return 0, err
+	}
+	return v, nil
+}
+
 // ParseConnectionString parses a PostgreSQL connection string
 func ParseConnectionString(connectionString string) (*ConnectionInfo, error) {
 	// Handle both URL and DSN formats
@@ -200,22 +211,33 @@ func (c *PostgresClient) CreateUser(ctx context.Context, username, password stri
 			return fmt.Errorf("failed to create user: %w", err)
 		}
 
-		// Grant new user to admin with INHERIT + SET so CREATE/ALTER DATABASE
-		// ... OWNER works on PG 16+ (defaults changed to NOINHERIT, NOSET).
+		// Grant new user to admin so CREATE/ALTER DATABASE ... OWNER works.
 		// Resolve CURRENT_USER to a literal name first (some managed PG
 		// providers reject CURRENT_USER as a special role specifier — XX000).
-		// Aurora/RDS auto-grant these flags via an event trigger; Scaleway
-		// managed RDB and self-hosted PG 16+ do not.
+		//
+		// PG 16 introduced WITH INHERIT/SET options on GRANT and tightened
+		// default behaviour to NOINHERIT, NOSET, NOADMIN. CREATE/ALTER
+		// DATABASE OWNER on PG 16+ requires the executor to hold SET on
+		// the owner role. Aurora/RDS paper over this via an event trigger;
+		// Scaleway managed RDB and self-hosted PG 16+ do not. So on PG
+		// 16+ we explicitly request INHERIT TRUE, SET TRUE.
+		//
+		// Pre-PG 16 the WITH INHERIT/SET syntax does not exist (parser
+		// fails with 42601). On those versions the default GRANT is
+		// sufficient — bare role membership has always implied SET ROLE.
 		var adminRole string
 		if err := c.db.QueryRowContext(ctx, "SELECT current_user").Scan(&adminRole); err != nil {
 			return fmt.Errorf("failed to resolve current admin role: %w", err)
 		}
-		grantQuery := fmt.Sprintf(
-			"GRANT %s TO %s WITH INHERIT TRUE, SET TRUE",
-			quoteIdentifier(username),
-			quoteIdentifier(adminRole),
-		)
-		if _, err := c.db.ExecContext(ctx, grantQuery); err != nil {
+		grantClauses := fmt.Sprintf("GRANT %s TO %s", quoteIdentifier(username), quoteIdentifier(adminRole))
+		serverVersion, err := c.serverVersionNum(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to detect PostgreSQL server version: %w", err)
+		}
+		if serverVersion >= 160000 {
+			grantClauses += " WITH INHERIT TRUE, SET TRUE"
+		}
+		if _, err := c.db.ExecContext(ctx, grantClauses); err != nil {
 			return fmt.Errorf("failed to grant user to admin (%s): %w", adminRole, err)
 		}
 	}
