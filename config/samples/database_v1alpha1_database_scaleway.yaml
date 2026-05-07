@@ -1,0 +1,33 @@
+apiVersion: database.opzkit.io/v1alpha1
+kind: Database
+metadata:
+  name: myapp-database-scaleway
+spec:
+  engine: postgres
+  databaseName: myapp_db
+
+  # Source of the admin DSN. Scaleway managed Postgres exposes the admin
+  # DSN as a Scaleway IAM secret in Secret Manager; the in-cluster path
+  # is to mirror it into a Kubernetes Secret via External Secrets and
+  # reference that here. Plain `connectionString.aws` is also valid if
+  # the admin DSN happens to live in AWS Secrets Manager.
+  connectionString:
+    kubernetes:
+      name: postgres-admin-connection
+      key: connectionString          # optional, defaults to "connectionString"
+
+  retainOnDelete: false
+
+  # Destination for the generated user credentials.
+  secretBackend:
+    scaleway:
+      region: fr-par
+      projectID: 5a339eb9-920f-4256-bbf2-d9ae6e0fb676
+      description: "Database credentials for myapp"
+      tags:
+        Environment: production
+        Application: myapp
+      authSecretRef:
+        # Kubernetes Secret holding `access_key` + `secret_key` keys
+        # (same shape as ESO's Scaleway provider authentication).
+        name: scaleway-dbuo-creds

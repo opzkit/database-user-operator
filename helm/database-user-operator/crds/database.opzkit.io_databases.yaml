@@ -273,6 +273,52 @@ spec:
                           the Database resource.
                         type: string
                     type: object
+                  scaleway:
+                    description: Scaleway stores credentials in Scaleway Secret Manager.
+                    properties:
+                      authSecretRef:
+                        description: |-
+                          AuthSecretRef references a Kubernetes Secret in the same namespace
+                          as the Database holding `access_key` and `secret_key` data keys
+                          for the Scaleway IAM API key. Same shape as the Secret consumed by
+                          the Scaleway provider in External Secrets Operator.
+                        properties:
+                          name:
+                            description: Name of the Secret.
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      description:
+                        description: |-
+                          Description is the description applied to the Scaleway secret on
+                          create/update.
+                        type: string
+                      projectID:
+                        description: ProjectID is the Scaleway Project UUID owning
+                          the secret.
+                        type: string
+                      region:
+                        description: Region is the Scaleway region for Secret Manager
+                          (e.g. fr-par, nl-ams, pl-waw).
+                        enum:
+                        - fr-par
+                        - nl-ams
+                        - pl-waw
+                        type: string
+                      tags:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          Tags are key/value tags applied to the Scaleway secret. Scaleway
+                          stores tags as a flat list of strings; the controller serialises
+                          each entry as "key=value" on update.
+                        type: object
+                    required:
+                    - authSecretRef
+                    - projectID
+                    - region
+                    type: object
                 type: object
               secretName:
                 description: |-

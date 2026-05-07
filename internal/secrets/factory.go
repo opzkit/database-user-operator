@@ -21,16 +21,24 @@ import (
 
 // ErrNoBackendConfigured is returned when a Database resource doesn't
 // specify any of the supported destination backends.
-var ErrNoBackendConfigured = errors.New("spec.secretBackend has no backend configured: set one of aws, kubernetes, infisical")
+var ErrNoBackendConfigured = errors.New("spec.secretBackend has no backend configured: set one of aws, kubernetes, infisical, scaleway")
 
 // ErrMultipleBackendsConfigured is returned when a Database resource
 // specifies more than one destination backend simultaneously.
-var ErrMultipleBackendsConfigured = errors.New("spec.secretBackend has multiple backends configured: set exactly one of aws, kubernetes, infisical")
+var ErrMultipleBackendsConfigured = errors.New("spec.secretBackend has multiple backends configured: set exactly one of aws, kubernetes, infisical, scaleway")
 
 // Standard data keys for the Infisical Universal Auth bootstrap Secret.
 const (
 	InfisicalAuthClientIDKey     = "clientId"
 	InfisicalAuthClientSecretKey = "clientSecret"
+)
+
+// Standard data keys for the Scaleway IAM API-key bootstrap Secret.
+// Mirrors the shape ESO's Scaleway provider expects, so the same Secret
+// can back both stores when a cluster has ESO + DBUO.
+const (
+	ScalewayAuthAccessKeyKey = "access_key"
+	ScalewayAuthSecretKeyKey = "secret_key"
 )
 
 // NewBackend selects and constructs a Backend implementation based on
@@ -53,6 +61,9 @@ func NewBackend(ctx context.Context, db *databasev1alpha1.Database, k8sClient cl
 		count++
 	}
 	if sb.Infisical != nil {
+		count++
+	}
+	if sb.Scaleway != nil {
 		count++
 	}
 	if count == 0 {
@@ -95,6 +106,20 @@ func NewBackend(ctx context.Context, db *databasev1alpha1.Database, k8sClient cl
 			auth,
 		), nil
 
+	case sb.Scaleway != nil:
+		if k8sClient == nil {
+			return nil, errors.New("scaleway secret backend requires a non-nil k8s client (to read the API-key Secret)")
+		}
+		auth, err := readScalewayAuth(ctx, k8sClient, db.Namespace, sb.Scaleway.AuthSecretRef.Name)
+		if err != nil {
+			return nil, err
+		}
+		return NewScalewayBackend(
+			sb.Scaleway.Region,
+			sb.Scaleway.ProjectID,
+			auth,
+		)
+
 	default:
 		return nil, ErrNoBackendConfigured
 	}
@@ -114,4 +139,20 @@ func readInfisicalAuth(ctx context.Context, k8sClient client.Client, namespace, 
 		return InfisicalAuth{}, fmt.Errorf("infisical auth secret %s/%s missing %q or %q key", namespace, name, InfisicalAuthClientIDKey, InfisicalAuthClientSecretKey)
 	}
 	return InfisicalAuth{ClientID: clientID, ClientSecret: clientSecret}, nil
+}
+
+// readScalewayAuth reads the access_key/secret_key pair from the
+// Kubernetes Secret referenced by spec.secretBackend.scaleway.authSecretRef.
+// The Secret must live in the same namespace as the Database resource.
+func readScalewayAuth(ctx context.Context, k8sClient client.Client, namespace, name string) (ScalewayAuth, error) {
+	var s corev1.Secret
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &s); err != nil {
+		return ScalewayAuth{}, fmt.Errorf("failed to read scaleway auth secret %s/%s: %w", namespace, name, err)
+	}
+	accessKey := string(s.Data[ScalewayAuthAccessKeyKey])
+	secretKey := string(s.Data[ScalewayAuthSecretKeyKey])
+	if accessKey == "" || secretKey == "" {
+		return ScalewayAuth{}, fmt.Errorf("scaleway auth secret %s/%s missing %q or %q key", namespace, name, ScalewayAuthAccessKeyKey, ScalewayAuthSecretKeyKey)
+	}
+	return ScalewayAuth{AccessKey: accessKey, SecretKey: secretKey}, nil
 }
