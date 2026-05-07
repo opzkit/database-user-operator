@@ -121,8 +121,7 @@ Redeploy with increased verbosity:
 helm upgrade database-user-operator ./helm/database-user-operator \
   --set controllerManager.args[0]="--health-probe-bind-address=:8081" \
   --set controllerManager.args[1]="--metrics-bind-address=127.0.0.1:8080" \
-  --set controllerManager.args[2]="--leader-elect" \
-  --set controllerManager.args[3]="--zap-log-level=debug"
+  --set controllerManager.args[2]="--zap-log-level=debug"
 ```
 
 Check logs for more details:

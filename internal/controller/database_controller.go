@@ -52,7 +52,7 @@ type DatabaseReconciler struct {
 // +kubebuilder:rbac:groups=database.opzkit.io,resources=databases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=database.opzkit.io,resources=databases/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=database.opzkit.io,resources=databases/finalizers,verbs=update
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -369,9 +369,38 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 						oldRegion, region)
 				}
 			} else {
-				// Not a region change - this is an unrecoverable error
-				return fmt.Errorf("database and/or user exist but secret is missing - cannot recover password (database exists: %v, user exists: %v, secret exists: %v). Please delete the Database CR and recreate it, or manually create the secret with the correct password",
-					dbExists, userExists, secretExists)
+				// Not a region change. The user (and optionally database) exists from a
+				// prior partial reconcile but the destination secret is missing — rotate
+				// the password and recreate the secret. Safe because the operator owns
+				// the user (CREATE USER stamps it via COMMENT ON ROLE) and CreateUser is
+				// idempotent (ALTER USER WITH PASSWORD when the user already exists).
+				logger.Info("Secret missing for existing user/database — rotating password and recreating secret",
+					"database", db.Spec.DatabaseName,
+					"username", username,
+					"secretName", secretName,
+					"userExists", userExists,
+					"dbExists", dbExists)
+
+				password, err = database.GeneratePassword(32)
+				if err != nil {
+					return err
+				}
+				if err := dbClient.CreateUser(ctx, username, password); err != nil {
+					return fmt.Errorf("failed to rotate password for existing user: %w", err)
+				}
+				db.Status.UserCreated = true
+				db.Status.ActualUsername = username
+
+				if !dbExists {
+					logger.Info("Creating missing database during recovery",
+						"database", db.Spec.DatabaseName,
+						"owner", username)
+					if err := dbClient.CreateDatabase(ctx, db.Spec.DatabaseName, username); err != nil {
+						return err
+					}
+				}
+				db.Status.DatabaseCreated = true
+				db.Status.ActualSecretName = secretName
 			}
 
 		} else {
@@ -465,7 +494,8 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 		urlScheme = "mysql" // MariaDB uses mysql:// scheme
 	}
 
-	databaseURL := fmt.Sprintf("%s://%s:%s@%s:%d/%s",
+	databaseURL := fmt.Sprintf(
+		"%s://%s:%s@%s:%d/%s",
 		urlScheme,
 		url.QueryEscape(username),
 		url.QueryEscape(password),
@@ -989,13 +1019,18 @@ func needsReconciliation(db *databasev1alpha1.Database) bool {
 	return false
 }
 
-// getSecretNameOrDefault returns the secret name from the spec, or generates a default path
-// Default format: rds/<engine>/<databaseName>
+// getSecretNameOrDefault returns the secret name from the spec, or generates a backend-aware default.
+// AWS / Infisical: rds/<engine>/<databaseName> (path-shaped names allowed).
+// Kubernetes: rds-<engine>-<databaseName> (DNS-1123 — '/' is rejected by Secret name validation).
 func getSecretNameOrDefault(db *databasev1alpha1.Database) string {
 	if db.Spec.SecretName != "" {
 		return db.Spec.SecretName
 	}
-	return fmt.Sprintf("rds/%s/%s", db.Spec.Engine, db.Spec.DatabaseName)
+	sep := "/"
+	if db.Spec.SecretBackend.Kubernetes != nil {
+		sep = "-"
+	}
+	return fmt.Sprintf("rds%s%s%s%s", sep, db.Spec.Engine, sep, db.Spec.DatabaseName)
 }
 
 // getRegion determines the AWS region from the Database spec.

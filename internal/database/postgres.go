@@ -200,12 +200,17 @@ func (c *PostgresClient) CreateUser(ctx context.Context, username, password stri
 			return fmt.Errorf("failed to create user: %w", err)
 		}
 
-		// Grant the new user to the current admin user so we can SET ROLE to it
-		// This is required for CREATE DATABASE ... OWNER to work in managed PostgreSQL (RDS, etc)
-		grantQuery := fmt.Sprintf("GRANT %s TO CURRENT_USER", quoteIdentifier(username))
-		_, err = c.db.ExecContext(ctx, grantQuery)
-		if err != nil {
-			return fmt.Errorf("failed to grant user to admin: %w", err)
+		// Grant the new user to the current admin role so we can SET ROLE to it.
+		// CURRENT_USER is rejected as a role-recipient by some managed PG providers
+		// (Scaleway managed RDB raises XX000 "cannot use special role specifier"),
+		// so resolve it to a literal role name first.
+		var adminRole string
+		if err := c.db.QueryRowContext(ctx, "SELECT current_user").Scan(&adminRole); err != nil {
+			return fmt.Errorf("failed to resolve current admin role: %w", err)
+		}
+		grantQuery := fmt.Sprintf("GRANT %s TO %s", quoteIdentifier(username), quoteIdentifier(adminRole))
+		if _, err := c.db.ExecContext(ctx, grantQuery); err != nil {
+			return fmt.Errorf("failed to grant user to admin (%s): %w", adminRole, err)
 		}
 	}
 
@@ -246,7 +251,8 @@ func (c *PostgresClient) GrantPrivileges(ctx context.Context, username, dbName s
 	}
 
 	// Create connection string for the target database
-	targetConnStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+	targetConnStr := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		url.QueryEscape(connInfo.Username),
 		url.QueryEscape(connInfo.Password),
 		connInfo.Host,
