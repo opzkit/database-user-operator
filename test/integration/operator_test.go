@@ -44,7 +44,8 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			}, nil
 		})
 
-		cfg, err := config.LoadDefaultConfig(awsCtx,
+		cfg, err := config.LoadDefaultConfig(
+			awsCtx,
 			config.WithRegion("us-east-1"),
 			config.WithEndpointResolverWithOptions(customResolver),
 			config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
@@ -105,9 +106,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "testdb",
 				Username:     "testuser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
@@ -203,9 +211,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "defaultdb",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 			})
 
@@ -232,9 +247,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEnginePostgreSQL,
 				DatabaseName: "postgresqldb",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 			})
 
@@ -266,9 +288,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				DatabaseName:   "retaindb",
 				Username:       "retainuser",
 				RetainOnDelete: &retainTrue,
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
@@ -329,7 +358,11 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			}, "30s", "1s").Should(Succeed())
 		})
 
-		It("Should detect and report error when database/user exist but secret is missing", func() {
+		It("Should recover by rotating password when database/user exist but secret is missing", func() {
+			// Recovery path introduced in PR #135: when the user (and optionally
+			// database) already exist from a prior partial reconcile but the
+			// destination secret is gone, the controller rotates the password via
+			// ALTER USER and recreates the secret rather than erroring out.
 			dbName1 := "test-pg-orphaned-" + randomString(5)
 			dbName2 := "test-pg-orphaned-" + randomString(5)
 			secretName := fmt.Sprintf("test/databases/%s/credentials", dbName1)
@@ -339,9 +372,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "orphaneddb",
 				Username:     "orphaneduser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
@@ -367,37 +407,47 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating second Database CR with same database/username but no secret")
-			// This simulates the error scenario: database and user exist, but secret is missing
 			createDatabase(namespace, dbName2, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "orphaneddb",
 				Username:     "orphaneduser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
 
-			By("Verifying the operator detects the error condition")
-			Eventually(func() string {
-				db, err := getDatabase(namespace, dbName2)
-				if err != nil {
-					return ""
-				}
-				return db.Status.Phase
-			}, "30s", "1s").Should(Equal("Error"))
+			By("Waiting for the operator to recover (rotate password and recreate secret)")
+			waitForDatabaseCreated(namespace, dbName2)
 
-			By("Verifying the error message is correct")
+			By("Verifying status reflects successful recovery")
 			db, err := getDatabase(namespace, dbName2)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(db.Status.Message).To(ContainSubstring("database and/or user exist but secret is missing"))
-			Expect(db.Status.Message).To(ContainSubstring("cannot recover password"))
+			Expect(db.Status.DatabaseCreated).To(BeTrue())
+			Expect(db.Status.UserCreated).To(BeTrue())
+			Expect(db.Status.SecretCreated).To(BeTrue())
+			Expect(db.Status.Phase).To(Or(Equal("Ready"), Equal("Reconciling")))
+
+			By("Verifying secret was recreated in AWS Secrets Manager")
+			result, err := smClient.GetSecretValue(awsCtx, &secretsmanager.GetSecretValueInput{
+				SecretId: aws.String(secretName),
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.SecretString).NotTo(BeNil())
+			var secretData map[string]interface{}
+			Expect(json.Unmarshal([]byte(*result.SecretString), &secretData)).To(Succeed())
+			Expect(secretData["DB_USERNAME"]).To(Equal("orphaneduser"))
+			Expect(secretData["DB_PASSWORD"]).NotTo(BeEmpty())
 
 			By("Cleaning up - deleting the second Database CR and PostgreSQL resources")
-			// Set retainOnDelete to false to ensure cleanup
-			db, err = getDatabase(namespace, dbName2)
-			Expect(err).NotTo(HaveOccurred())
 			retainFalse := false
 			db.Spec.RetainOnDelete = &retainFalse
 			Expect(k8sClient.Update(ctx, db)).Should(Succeed())
@@ -416,9 +466,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEngineMySQL,
 				DatabaseName: "mysqldb",
 				Username:     "mysqluser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "mysql-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "mysql-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
@@ -515,9 +572,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEngineMySQL,
 				DatabaseName: "defaultdb",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "mysql-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "mysql-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 			})
 
@@ -544,9 +608,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEngineMariaDB,
 				DatabaseName: "mariadb",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "mysql-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "mysql-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 			})
 
@@ -581,9 +652,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "multidb_pg",
 				Username:     "pguser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: pgSecretName,
 			})
@@ -592,9 +670,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEngineMySQL,
 				DatabaseName: "multidb_mysql",
 				Username:     "mysqluser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "mysql-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "mysql-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: mysqlSecretName,
 			})
@@ -662,9 +747,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "errordb",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "non-existent-secret",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "non-existent-secret",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 			})
 

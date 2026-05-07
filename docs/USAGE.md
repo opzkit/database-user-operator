@@ -24,8 +24,9 @@ metadata:
 spec:
   engine: postgres
   databaseName: myapp_db
-  connectionStringSecretRef:
-    name: postgres-admin
+  connectionString:
+    kubernetes:
+      name: postgres-admin
 ```
 
 This creates:
@@ -45,7 +46,7 @@ This creates:
 |-------|------|-------------|
 | `engine` | string | Database engine: `postgres`, `postgresql`, `mysql`, `mariadb` |
 | `databaseName` | string | Name of database to create (pattern: `^[a-z][a-z0-9_]*$`, max 63 chars) |
-| `connectionStringSecretRef` OR `connectionStringAWSSecretRef` | object | Admin connection string reference |
+| `connectionString.kubernetes` OR `connectionString.aws` | object | Admin connection string reference |
 
 #### Optional Fields
 
@@ -55,16 +56,17 @@ This creates:
 | `secretName` | string | `rds/<engine>/<databaseName>` | AWS secret path |
 | `privileges` | []string | `["ALL"]` | Privileges to grant |
 | `retainOnDelete` | bool | `true` | Retain resources on CR deletion |
-| `awsSecretsManager` | object | - | AWS Secrets Manager config |
+| `secretBackend.aws` | object | - | AWS Secrets Manager config |
 
-### connectionStringSecretRef
+### connectionString.kubernetes
 
 Reference to Kubernetes Secret containing admin connection string:
 
 ```yaml
-connectionStringSecretRef:
-  name: postgres-admin          # required
-  key: connectionString          # optional, defaults to "connectionString"
+connectionString:
+  kubernetes:
+    name: postgres-admin          # required
+    key: connectionString          # optional, defaults to "connectionString"
 ```
 
 The referenced secret should contain:
@@ -77,29 +79,31 @@ stringData:
   connectionString: "postgresql://admin:password@db.example.com:5432/postgres?sslmode=require"
 ```
 
-### connectionStringAWSSecretRef
+### connectionString.aws
 
 Reference to AWS Secrets Manager secret containing admin connection string:
 
 ```yaml
-connectionStringAWSSecretRef:
-  secretName: rds/admin/postgres    # required - name or ARN
-  key: connectionString               # optional, defaults to "connectionString"
-  region: us-east-1                   # optional, uses AWS SDK default if not specified
+connectionString:
+  aws:
+    secretName: rds/admin/postgres    # required - name or ARN
+    key: connectionString               # optional, defaults to "connectionString"
+    region: us-east-1                   # optional, uses AWS SDK default if not specified
 ```
 
-### awsSecretsManager
+### secretBackend.aws
 
 Configuration for storing created credentials:
 
 ```yaml
-awsSecretsManager:
-  region: us-east-1                   # optional, defaults to AWS SDK default
-  description: "DB credentials"       # optional
-  tags:                               # optional
-    Environment: production
-    Application: myapp
-    ManagedBy: database-user-operator
+secretBackend:
+  aws:
+    region: us-east-1                   # optional, defaults to AWS SDK default
+    description: "DB credentials"       # optional
+    tags:                               # optional
+      Environment: production
+      Application: myapp
+      ManagedBy: database-user-operator
 ```
 
 **Note**: Created credentials are **always** stored in AWS Secrets Manager, regardless of where the admin connection string comes from.
@@ -107,8 +111,8 @@ awsSecretsManager:
 ### Region Priority
 
 The operator determines AWS region in this order:
-1. `spec.awsSecretsManager.region` (highest priority)
-2. `spec.connectionStringAWSSecretRef.region`
+1. `spec.secretBackend.aws.region` (highest priority)
+2. `spec.connectionString.aws.region`
 3. AWS SDK default (environment variables, instance metadata, etc.)
 
 ### Privileges
@@ -147,12 +151,14 @@ metadata:
 spec:
   engine: postgres
   databaseName: app_database
-  connectionStringSecretRef:
-    name: postgres-admin-connection
-  awsSecretsManager:
-    region: us-east-1
-    tags:
-      Environment: production
+  connectionString:
+    kubernetes:
+      name: postgres-admin-connection
+  secretBackend:
+    aws:
+      region: us-east-1
+      tags:
+        Environment: production
 ```
 
 ### Example 2: Custom Username and Secret Path
@@ -167,8 +173,9 @@ spec:
   databaseName: analytics
   username: analytics_user
   secretName: /myapp/databases/analytics
-  connectionStringSecretRef:
-    name: postgres-admin
+  connectionString:
+    kubernetes:
+      name: postgres-admin
   privileges:
     - SELECT
     - INSERT
@@ -184,15 +191,17 @@ metadata:
 spec:
   engine: postgresql
   databaseName: api_db
-  connectionStringAWSSecretRef:
-    secretName: rds/admin/postgres-main
-    region: eu-west-1
-  awsSecretsManager:
-    region: eu-west-1
-    description: "API database credentials"
-    tags:
-      Team: backend
-      Service: api
+  connectionString:
+    aws:
+      secretName: rds/admin/postgres-main
+      region: eu-west-1
+  secretBackend:
+    aws:
+      region: eu-west-1
+      description: "API database credentials"
+      tags:
+        Team: backend
+        Service: api
 ```
 
 ### Example 4: Temporary Database (Cleanup on Deletion)
@@ -207,8 +216,9 @@ spec:
   engine: postgres
   databaseName: test_temp
   retainOnDelete: false  # Delete all resources on CR deletion
-  connectionStringSecretRef:
-    name: postgres-admin
+  connectionString:
+    kubernetes:
+      name: postgres-admin
 ```
 
 ### Example 5: Read-Only User
@@ -224,8 +234,9 @@ spec:
   username: readonly_user
   privileges:
     - SELECT
-  connectionStringSecretRef:
-    name: postgres-admin
+  connectionString:
+    kubernetes:
+      name: postgres-admin
 ```
 
 ### Example 6: MySQL Database
@@ -239,12 +250,14 @@ spec:
   engine: mysql
   databaseName: myapp_db
   username: myapp_user
-  connectionStringSecretRef:
-    name: mysql-admin
-  awsSecretsManager:
-    region: us-east-1
-    tags:
-      Environment: production
+  connectionString:
+    kubernetes:
+      name: mysql-admin
+  secretBackend:
+    aws:
+      region: us-east-1
+      tags:
+        Environment: production
 ```
 
 ### Example 7: MariaDB with Custom Secret Path
@@ -258,10 +271,11 @@ spec:
   engine: mariadb
   databaseName: analytics_db
   secretName: /mariadb/production/analytics
-  connectionStringAWSSecretRef:
-    secretName: rds/admin/mariadb-main
-    key: connectionString
-    region: eu-west-1
+  connectionString:
+    aws:
+      secretName: rds/admin/mariadb-main
+      key: connectionString
+      region: eu-west-1
 ```
 
 ## Secret Format
@@ -427,8 +441,8 @@ Use this for temporary/test databases.
 - Operator restart (idempotent checks prevent duplicates)
 
 #### What operations are safe?
-- ✅ Updating `awsSecretsManager.tags` - Only updates secret tags
-- ✅ Updating `awsSecretsManager.description` - Only updates description
+- ✅ Updating `secretBackend.aws.tags` - Only updates secret tags
+- ✅ Updating `secretBackend.aws.description` - Only updates description
 - ✅ Updating `privileges` - Reapplies grants
 - ❌ Changing `databaseName` - Not supported (create new resource)
 - ❌ Changing `username` - Not supported (create new resource)

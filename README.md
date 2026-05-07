@@ -16,8 +16,8 @@ The Database User Operator creates and manages databases and users declaratively
 ### Prerequisites
 
 - Kubernetes cluster (v1.28+)
-- PostgreSQL, MySQL, or MariaDB database instance
-- AWS credentials with Secrets Manager permissions
+- PostgreSQL 14+ (tested on 15, 16, 17), MySQL 8.0+, or MariaDB 10.6+
+- AWS credentials with Secrets Manager permissions (only when using `secretBackend.aws` or `connectionString.aws`)
 
 ### Installation
 
@@ -78,12 +78,14 @@ metadata:
 spec:
   engine: postgres
   databaseName: myapp_db
-  connectionStringSecretRef:
-    name: postgres-admin
-  awsSecretsManager:
-    region: us-east-1
-    tags:
-      Environment: production
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+  secretBackend:
+    aws:
+      region: us-east-1
+      tags:
+        Environment: production
 ```
 
 3. Apply and check status:
@@ -136,12 +138,14 @@ metadata:
 spec:
   engine: mysql
   databaseName: myapp_db
-  connectionStringSecretRef:
-    name: mysql-admin
-  awsSecretsManager:
-    region: us-east-1
-    tags:
-      Environment: production
+  connectionString:
+    kubernetes:
+      name: mysql-admin
+  secretBackend:
+    aws:
+      region: us-east-1
+      tags:
+        Environment: production
 ```
 
 3. Apply and check status:
@@ -181,10 +185,12 @@ metadata:
 spec:
   engine: mariadb  # Uses MySQL driver and protocol
   databaseName: myapp_db
-  connectionStringSecretRef:
-    name: mariadb-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: mariadb-admin
+  secretBackend:
+    aws:
+      region: us-east-1
 ```
 
 The operator treats MariaDB identically to MySQL, using the same driver and SQL syntax. The stored secret will use the `MYSQL_URL` format for compatibility.
@@ -205,10 +211,12 @@ metadata:
 spec:
   engine: postgres
   databaseName: spring_app
-  connectionStringSecretRef:
-    name: postgres-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+  secretBackend:
+    aws:
+      region: us-east-1
   secretTemplate: |
     {
       "spring.datasource.url": "jdbc:postgresql://{{.DBHost}}:{{.DBPort}}/{{.DBName}}",
@@ -228,10 +236,12 @@ metadata:
 spec:
   engine: mysql
   databaseName: simple_app
-  connectionStringSecretRef:
-    name: mysql-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: mysql-admin
+  secretBackend:
+    aws:
+      region: us-east-1
   secretTemplate: |
     {
       "connectionString": "{{.DatabaseURL}}"
@@ -253,10 +263,12 @@ spec:
   username: readonly_user
   privileges:
     - SELECT
-  connectionStringSecretRef:
-    name: postgres-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+  secretBackend:
+    aws:
+      region: us-east-1
 ```
 
 ### Custom Username and Secret Path
@@ -271,14 +283,16 @@ spec:
   databaseName: myapp_db
   username: custom_user
   secretName: /custom/path/myapp-credentials
-  connectionStringSecretRef:
-    name: postgres-admin
-  awsSecretsManager:
-    region: us-east-1
-    description: "Custom application database"
-    tags:
-      Team: platform
-      CostCenter: engineering
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+  secretBackend:
+    aws:
+      region: us-east-1
+      description: "Custom application database"
+      tags:
+        Team: platform
+        CostCenter: engineering
 ```
 
 ### Delete Resources on CR Deletion
@@ -294,10 +308,12 @@ spec:
   engine: postgres
   databaseName: temp_db
   retainOnDelete: false  # Delete database and user when CR is deleted
-  connectionStringSecretRef:
-    name: postgres-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+  secretBackend:
+    aws:
+      region: us-east-1
 ```
 
 For more advanced examples and secret template documentation, see [Secret Templates Guide](docs/SECRET_TEMPLATES.md).

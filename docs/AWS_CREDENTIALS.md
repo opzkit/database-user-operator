@@ -178,8 +178,9 @@ The connection string source only determines where to read the ADMIN connection 
 - **Read admin connection from Kubernetes Secret:**
   ```yaml
   spec:
-    connectionStringSecretRef:
-      name: postgres-admin-connection
+    connectionString:
+      kubernetes:
+        name: postgres-admin-connection
   ```
   - Admin credentials: Kubernetes Secret
   - Created credentials: AWS Secrets Manager ⚠️
@@ -187,9 +188,10 @@ The connection string source only determines where to read the ADMIN connection 
 - **Read admin connection from AWS Secrets Manager:**
   ```yaml
   spec:
-    connectionStringAWSSecretRef:
-      secretName: rds/admin/postgres-connection
-      region: us-east-1
+    connectionString:
+      aws:
+        secretName: rds/admin/postgres-connection
+        region: us-east-1
   ```
   - Admin credentials: AWS Secrets Manager
   - Created credentials: AWS Secrets Manager

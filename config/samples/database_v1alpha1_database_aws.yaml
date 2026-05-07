@@ -3,38 +3,30 @@ kind: Database
 metadata:
   name: myapp-database-aws
 spec:
-  # Database engine type
   engine: postgres
-
-  # Name of the database to create
   databaseName: myapp_db
 
-  # Use AWS Secrets Manager for the admin connection string
-  # Note: Created database credentials will also be stored in AWS Secrets Manager
-  connectionStringAWSSecretRef:
-    secretName: rds/admin/postgres-connection
-    key: connectionString  # optional, defaults to "connectionString"
-    region: us-east-1      # optional, uses default AWS region if not specified
+  # Source of the admin DSN: read from AWS Secrets Manager.
+  connectionString:
+    aws:
+      secretName: rds/admin/postgres-connection
+      key: connectionString          # optional, defaults to "connectionString"
+      region: us-east-1
 
-  # Username for the database user (optional, defaults to databaseName)
+  # Optional — defaults to databaseName
   username: myapp_user
 
-  # Secret name for storing the created credentials in AWS Secrets Manager (optional)
-  # Defaults to rds/<engine>/<databaseName>
+  # Optional — defaults to rds/<engine>/<databaseName>
   secretName: rds/postgres/myapp_db
 
-  # Privileges to grant (optional, defaults to ["ALL"])
-  privileges:
-    - ALL
-
-  # Retain database/user on CR deletion (optional, defaults to true)
+  privileges: [ALL]
   retainOnDelete: true
 
-  # AWS Secrets Manager configuration for storing created credentials (optional)
-  # Created credentials are ALWAYS stored in AWS Secrets Manager
-  awsSecretsManager:
-    region: us-east-1      # required - AWS region for Secrets Manager
-    description: "Database credentials for myapp"
-    tags:
-      Environment: production
-      Application: myapp
+  # Destination for the generated user credentials.
+  secretBackend:
+    aws:
+      region: us-east-1
+      description: "Database credentials for myapp"
+      tags:
+        Environment: production
+        Application: myapp

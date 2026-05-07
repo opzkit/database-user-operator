@@ -57,10 +57,12 @@ metadata:
 spec:
   engine: postgres
   databaseName: myapp_db
-  connectionStringSecretRef:
-    name: postgres-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+  secretBackend:
+    aws:
+      region: us-east-1
   # No secretTemplate specified - uses default format
 ```
 
@@ -88,10 +90,12 @@ metadata:
 spec:
   engine: postgres
   databaseName: spring_app
-  connectionStringSecretRef:
-    name: postgres-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+  secretBackend:
+    aws:
+      region: us-east-1
   secretTemplate: |
     {
       "spring.datasource.url": "jdbc:postgresql://{{.DBHost}}:{{.DBPort}}/{{.DBName}}",
@@ -123,10 +127,12 @@ metadata:
 spec:
   engine: mysql
   databaseName: simple_app
-  connectionStringSecretRef:
-    name: mysql-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: mysql-admin
+  secretBackend:
+    aws:
+      region: us-east-1
   secretTemplate: |
     {
       "connectionString": "{{.DatabaseURL}}"
@@ -152,10 +158,12 @@ metadata:
 spec:
   engine: postgres
   databaseName: env_app
-  connectionStringSecretRef:
-    name: postgres-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+  secretBackend:
+    aws:
+      region: us-east-1
   secretTemplate: |
     {
       "DATABASE_HOST": "{{.DBHost}}",
@@ -191,10 +199,12 @@ metadata:
 spec:
   engine: postgres
   databaseName: django_app
-  connectionStringSecretRef:
-    name: postgres-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+  secretBackend:
+    aws:
+      region: us-east-1
   secretTemplate: |
     {
       "ENGINE": "django.db.backends.postgresql",
@@ -230,10 +240,12 @@ metadata:
 spec:
   engine: mysql
   databaseName: nodejs_app
-  connectionStringSecretRef:
-    name: mysql-admin
-  awsSecretsManager:
-    region: us-east-1
+  connectionString:
+    kubernetes:
+      name: mysql-admin
+  secretBackend:
+    aws:
+      region: us-east-1
   secretTemplate: |
     {
       "type": "mysql",
@@ -328,14 +340,16 @@ metadata:
 spec:
   engine: postgres
   databaseName: myapp
-  connectionStringSecretRef:
-    name: postgres-admin
-  awsSecretsManager:
-    region: us-east-1
-    description: "Database credentials for Spring Boot application"
-    tags:
-      Application: myapp
-      Framework: spring-boot
+  connectionString:
+    kubernetes:
+      name: postgres-admin
+  secretBackend:
+    aws:
+      region: us-east-1
+      description: "Database credentials for Spring Boot application"
+      tags:
+        Application: myapp
+        Framework: spring-boot
   # Custom template for Spring Boot application.properties format
   secretTemplate: |
     {

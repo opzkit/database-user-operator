@@ -200,12 +200,23 @@ func (c *PostgresClient) CreateUser(ctx context.Context, username, password stri
 			return fmt.Errorf("failed to create user: %w", err)
 		}
 
-		// Grant the new user to the current admin user so we can SET ROLE to it
-		// This is required for CREATE DATABASE ... OWNER to work in managed PostgreSQL (RDS, etc)
-		grantQuery := fmt.Sprintf("GRANT %s TO CURRENT_USER", quoteIdentifier(username))
-		_, err = c.db.ExecContext(ctx, grantQuery)
-		if err != nil {
-			return fmt.Errorf("failed to grant user to admin: %w", err)
+		// Grant new user to admin with INHERIT + SET so CREATE/ALTER DATABASE
+		// ... OWNER works on PG 16+ (defaults changed to NOINHERIT, NOSET).
+		// Resolve CURRENT_USER to a literal name first (some managed PG
+		// providers reject CURRENT_USER as a special role specifier — XX000).
+		// Aurora/RDS auto-grant these flags via an event trigger; Scaleway
+		// managed RDB and self-hosted PG 16+ do not.
+		var adminRole string
+		if err := c.db.QueryRowContext(ctx, "SELECT current_user").Scan(&adminRole); err != nil {
+			return fmt.Errorf("failed to resolve current admin role: %w", err)
+		}
+		grantQuery := fmt.Sprintf(
+			"GRANT %s TO %s WITH INHERIT TRUE, SET TRUE",
+			quoteIdentifier(username),
+			quoteIdentifier(adminRole),
+		)
+		if _, err := c.db.ExecContext(ctx, grantQuery); err != nil {
+			return fmt.Errorf("failed to grant user to admin (%s): %w", adminRole, err)
 		}
 	}
 
@@ -246,7 +257,8 @@ func (c *PostgresClient) GrantPrivileges(ctx context.Context, username, dbName s
 	}
 
 	// Create connection string for the target database
-	targetConnStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+	targetConnStr := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		url.QueryEscape(connInfo.Username),
 		url.QueryEscape(connInfo.Password),
 		connInfo.Host,
