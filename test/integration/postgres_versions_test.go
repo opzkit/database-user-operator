@@ -82,9 +82,16 @@ var _ = Describe("PostgreSQL Version Compatibility", func() {
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: fmt.Sprintf("pg%sdb", c.version),
 				Username:     fmt.Sprintf("pg%suser", c.version),
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: c.secretRefName,
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: c.secretRefName,
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
