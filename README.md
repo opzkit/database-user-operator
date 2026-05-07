@@ -16,8 +16,8 @@ The Database User Operator creates and manages databases and users declaratively
 ### Prerequisites
 
 - Kubernetes cluster (v1.28+)
-- PostgreSQL, MySQL, or MariaDB database instance
-- AWS credentials with Secrets Manager permissions
+- PostgreSQL 14+ (tested on 15, 16, 17), MySQL 8.0+, or MariaDB 10.6+
+- AWS credentials with Secrets Manager permissions (only when using `secretBackend.aws` or `connectionString.aws`)
 
 ### Installation
 
