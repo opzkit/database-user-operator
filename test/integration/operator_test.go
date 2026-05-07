@@ -105,9 +105,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "testdb",
 				Username:     "testuser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
@@ -203,9 +210,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "defaultdb",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 			})
 
@@ -232,9 +246,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEnginePostgreSQL,
 				DatabaseName: "postgresqldb",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 			})
 
@@ -266,9 +287,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				DatabaseName:   "retaindb",
 				Username:       "retainuser",
 				RetainOnDelete: &retainTrue,
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
@@ -339,9 +367,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "orphaneddb",
 				Username:     "orphaneduser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
@@ -372,9 +407,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "orphaneddb",
 				Username:     "orphaneduser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
@@ -416,9 +458,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEngineMySQL,
 				DatabaseName: "mysqldb",
 				Username:     "mysqluser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "mysql-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "mysql-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: secretName,
 			})
@@ -515,9 +564,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEngineMySQL,
 				DatabaseName: "defaultdb",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "mysql-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "mysql-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 			})
 
@@ -544,9 +600,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEngineMariaDB,
 				DatabaseName: "mariadb",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "mysql-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "mysql-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 			})
 
@@ -581,9 +644,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "multidb_pg",
 				Username:     "pguser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "postgres-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "postgres-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: pgSecretName,
 			})
@@ -592,9 +662,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 				Engine:       databasev1alpha1.DatabaseEngineMySQL,
 				DatabaseName: "multidb_mysql",
 				Username:     "mysqluser",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "mysql-connection",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "mysql-connection",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 				SecretName: mysqlSecretName,
 			})
@@ -662,9 +739,16 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
 				Engine:       databasev1alpha1.DatabaseEnginePostgres,
 				DatabaseName: "errordb",
-				ConnectionStringSecretRef: &databasev1alpha1.SecretKeyReference{
-					Name: "non-existent-secret",
-					Key:  "connectionString",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "non-existent-secret",
+						Key:  "connectionString",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					AWS: &databasev1alpha1.AWSSecretBackend{
+						Region: "us-east-1",
+					},
 				},
 			})
 
