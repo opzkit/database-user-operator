@@ -246,7 +246,8 @@ func (c *PostgresClient) GrantPrivileges(ctx context.Context, username, dbName s
 	}
 
 	// Create connection string for the target database
-	targetConnStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+	targetConnStr := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		url.QueryEscape(connInfo.Username),
 		url.QueryEscape(connInfo.Password),
 		connInfo.Host,

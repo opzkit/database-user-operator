@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -45,8 +46,9 @@ const (
 // DatabaseReconciler reconciles a Database object
 type DatabaseReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme       *runtime.Scheme
+	Recorder     record.EventRecorder
+	BackupConfig *BackupConfig // nil when backup not configured
 }
 
 // +kubebuilder:rbac:groups=database.opzkit.io,resources=databases,verbs=get;list;watch;create;update;patch;delete
@@ -54,6 +56,7 @@ type DatabaseReconciler struct {
 // +kubebuilder:rbac:groups=database.opzkit.io,resources=databases/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete
 
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -110,16 +113,17 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 		// Record event for user visibility (only once per error by checking if status changed)
 		if statusChanged {
-			if apierrors.IsNotFound(err) {
+			switch {
+			case apierrors.IsNotFound(err):
 				r.Recorder.Event(db, corev1.EventTypeWarning, "ConfigurationError", err.Error())
-			} else if isAWSPermissionError(err) {
+			case isAWSPermissionError(err):
 				r.Recorder.Event(db, corev1.EventTypeWarning, "PermissionError",
 					"AWS permission denied. Ensure the operator has IAM permissions for Secrets Manager. "+
 						"Grant secretsmanager:* on the secret ARN, or configure IRSA/instance profile.")
-			} else if isAWSResourceNotFoundError(err) {
+			case isAWSResourceNotFoundError(err):
 				r.Recorder.Event(db, corev1.EventTypeWarning, "ResourceNotFound",
 					"AWS resource not found. Verify the secret exists in AWS Secrets Manager and the name/region are correct in the Database spec.")
-			} else {
+			default:
 				r.Recorder.Event(db, corev1.EventTypeWarning, "ReconciliationError", err.Error())
 			}
 		}
@@ -294,7 +298,8 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 			"secretName", secretName)
 
 		// Decision logic based on resource existence
-		if dbExists && userExists && secretExists {
+		switch {
+		case dbExists && userExists && secretExists:
 			// All three exist - nothing to do, just verify and update status
 			logger.Info("Database, user, and secret already exist - skipping creation",
 				"database", db.Spec.DatabaseName,
@@ -360,7 +365,7 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 			db.Status.ActualUsername = username
 			db.Status.ActualSecretName = secretName
 
-		} else if (dbExists || userExists) && !secretExists {
+		case (dbExists || userExists) && !secretExists:
 			// Database and/or user exist but secret is missing
 			// Check if this is a region change scenario
 			regionChanged := db.Status.SecretRegion != "" && db.Status.SecretRegion != region
@@ -417,7 +422,7 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 					dbExists, userExists, secretExists)
 			}
 
-		} else {
+		default:
 			// Create missing resources
 
 			// Generate new password for new resources
@@ -508,7 +513,8 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 		urlScheme = "mysql" // MariaDB uses mysql:// scheme
 	}
 
-	databaseURL := fmt.Sprintf("%s://%s:%s@%s:%d/%s",
+	databaseURL := fmt.Sprintf(
+		"%s://%s:%s@%s:%d/%s",
 		urlScheme,
 		url.QueryEscape(username),
 		url.QueryEscape(password),
@@ -533,11 +539,12 @@ func (r *DatabaseReconciler) storeCredentialsInAWS(ctx context.Context, db *data
 	// Determine region: use awsSecretsManager.region if set, otherwise use connectionStringAWSSecretRef.region
 	region := r.getRegion(db)
 	var regionSource string
-	if db.Spec.AWSSecretsManager != nil && db.Spec.AWSSecretsManager.Region != "" {
+	switch {
+	case db.Spec.AWSSecretsManager != nil && db.Spec.AWSSecretsManager.Region != "":
 		regionSource = "spec.awsSecretsManager.region"
-	} else if db.Spec.ConnectionStringAWSSecretRef != nil && db.Spec.ConnectionStringAWSSecretRef.Region != "" {
+	case db.Spec.ConnectionStringAWSSecretRef != nil && db.Spec.ConnectionStringAWSSecretRef.Region != "":
 		regionSource = "spec.connectionStringAWSSecretRef.region"
-	} else {
+	default:
 		regionSource = "AWS SDK default (environment/instance metadata)"
 	}
 
@@ -807,6 +814,15 @@ func (r *DatabaseReconciler) reconcileDelete(ctx context.Context, db *databasev1
 		"retainOnDelete", retainOnDelete)
 
 	if !retainOnDelete {
+		// Check if backup is needed before proceeding with deletion
+		backupDone, backupResult, backupErr := r.reconcileBackup(ctx, db)
+		if backupErr != nil {
+			return ctrl.Result{}, backupErr
+		}
+		if !backupDone {
+			return backupResult, nil
+		}
+
 		logger.Info("Starting cleanup of database resources (retainOnDelete=false)",
 			"database", db.Spec.DatabaseName,
 			"username", db.Status.ActualUsername,
@@ -1215,6 +1231,7 @@ func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Configure custom rate limiter with exponential backoff: 15s, 30s, 60s
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&databasev1alpha1.Database{}).
+		Owns(&batchv1.Job{}).
 		WithOptions(controller.Options{
 			RateLimiter: workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](
 				15*time.Second, // Base delay: 15 seconds

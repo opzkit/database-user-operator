@@ -44,7 +44,8 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			}, nil
 		})
 
-		cfg, err := config.LoadDefaultConfig(awsCtx,
+		cfg, err := config.LoadDefaultConfig(
+			awsCtx,
 			config.WithRegion("us-east-1"),
 			config.WithEndpointResolverWithOptions(customResolver),
 			config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
