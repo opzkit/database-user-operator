@@ -27,9 +27,18 @@ echo "  - helm: $(which helm)"
 echo ""
 
 # Build operator image first - fail fast if build issues
-echo "Building operator image with coverage..."
+# Skip when CI has already built+loaded the image via buildx with GHA cache.
 cd "${PROJECT_ROOT}"
-docker build --build-arg ENABLE_COVERAGE=true -t database-user-operator:test .
+if [[ "${SKIP_OPERATOR_BUILD:-}" == "true" ]]; then
+    echo "Skipping operator image build (SKIP_OPERATOR_BUILD=true)"
+    if ! docker image inspect database-user-operator:test >/dev/null 2>&1; then
+        echo "ERROR: database-user-operator:test not present locally — build it before invoking this script."
+        exit 1
+    fi
+else
+    echo "Building operator image with coverage..."
+    docker build --build-arg ENABLE_COVERAGE=true -t database-user-operator:test .
+fi
 
 # Prepare Helm chart with CRDs
 echo "Preparing Helm chart with CRDs..."
@@ -101,22 +110,43 @@ wait_for_deployment() {
     return 1
 }
 
-# Deploy all services
-echo "Deploying PostgreSQL..."
-kubectl apply -f "${PROJECT_ROOT}/test/integration/manifests/postgres.yaml"
+# Deploy all services in parallel
+echo "Deploying PostgreSQL, MySQL, LocalStack..."
+kubectl apply -f "${PROJECT_ROOT}/test/integration/manifests/postgres.yaml" &
+kubectl apply -f "${PROJECT_ROOT}/test/integration/manifests/mysql.yaml" &
+kubectl apply -f "${PROJECT_ROOT}/test/integration/manifests/localstack.yaml" &
+wait
 
-echo "Deploying MySQL..."
-kubectl apply -f "${PROJECT_ROOT}/test/integration/manifests/mysql.yaml"
-
-echo "Deploying LocalStack..."
-kubectl apply -f "${PROJECT_ROOT}/test/integration/manifests/localstack.yaml"
-
-# Wait for all deployments to be available with periodic logging
+# Wait for deployments in parallel
 echo ""
 echo "Waiting for all deployments to be available..."
-wait_for_deployment postgres databases 300
-wait_for_deployment mysql databases 300
-wait_for_deployment localstack databases 300
+LOG_DIR=$(mktemp -d -t deploy-wait.XXXXXX)
+trap 'rm -rf "${LOG_DIR}"' EXIT
+
+wait_for_deployment postgres databases 300 > "${LOG_DIR}/postgres.log" 2>&1 &
+PG_PID=$!
+wait_for_deployment mysql databases 300 > "${LOG_DIR}/mysql.log" 2>&1 &
+MY_PID=$!
+wait_for_deployment localstack databases 300 > "${LOG_DIR}/localstack.log" 2>&1 &
+LS_PID=$!
+
+failed=0
+for pid_name in "postgres:${PG_PID}" "mysql:${MY_PID}" "localstack:${LS_PID}"; do
+    name=${pid_name%%:*}
+    pid=${pid_name##*:}
+    if wait "${pid}"; then
+        echo "  ✓ ${name}"
+    else
+        echo "  ✗ ${name} failed:"
+        cat "${LOG_DIR}/${name}.log"
+        failed=$((failed + 1))
+    fi
+done
+
+if [[ ${failed} -gt 0 ]]; then
+    echo "ERROR: ${failed} deployment(s) failed"
+    exit 1
+fi
 
 echo ""
 echo "✓ All services are ready"
