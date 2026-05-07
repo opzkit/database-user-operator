@@ -198,11 +198,13 @@ metadata:
 spec:
   engine: postgres
   databaseName: test_database
-  connectionStringSecretRef:
-    name: postgres-admin
+  connectionString:
+    kubernetes:
+      name: postgres-admin
   retainOnDelete: false  # Cleanup after test
-  awsSecretsManager:
-    region: us-east-1
+  secretBackend:
+    aws:
+      region: us-east-1
 ```
 
 3. Apply and observe:

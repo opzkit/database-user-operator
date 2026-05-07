@@ -6,7 +6,7 @@
 
 This error occurs when the operator tries to access AWS Secrets Manager but doesn't have valid AWS credentials.
 
-**Important:** The operator ALWAYS needs AWS permissions because created database credentials are ALWAYS stored in AWS Secrets Manager, regardless of where you store the admin connection string.
+**Important:** AWS permissions are required only when `spec.connectionString.aws` (admin DSN read from AWS Secrets Manager) or `spec.secretBackend.aws` (generated credentials written to AWS Secrets Manager) is configured. If both the admin DSN and the generated-credential destination use Kubernetes or Infisical, AWS permissions are not needed.
 
 #### Step 1: Verify the pod has AWS credentials
 
@@ -187,26 +187,27 @@ kubectl logs -l control-plane=controller-manager -c manager --tail=100 -f
 
 ## Credential Storage Backend
 
-**Created database credentials are ALWAYS stored in AWS Secrets Manager.**
+The admin connection string source (`spec.connectionString`) and the generated-credential destination (`spec.secretBackend`) are independent and configured separately.
 
-The connection string source only determines where to read the ADMIN connection string:
+| `spec.connectionString.*` | Admin DSN read from |
+|---------------------------|---------------------|
+| `kubernetes` | Kubernetes Secret in the cluster |
+| `aws` | AWS Secrets Manager |
 
-| Connection String Source | Admin Connection From | Created Credentials Stored In |
-|-------------------------|----------------------|------------------------------|
-| `connectionStringSecretRef` | Kubernetes Secret | AWS Secrets Manager ⚠️ |
-| `connectionStringAWSSecretRef` | AWS Secrets Manager | AWS Secrets Manager |
+| `spec.secretBackend.*` | Generated credentials written to |
+|------------------------|----------------------------------|
+| `aws` | AWS Secrets Manager |
+| `kubernetes` | Kubernetes Secret in the cluster |
+| `infisical` | Infisical Cloud (Universal Auth) |
 
-**This means:** AWS permissions are ALWAYS required, even if you use Kubernetes secrets for the admin connection.
+AWS permissions are required only when either side uses `aws`.
 
-### Verify which backend is being used
+### Verify which backends are being used
 
 ```bash
-kubectl get database myapp-database -o jsonpath='{.spec}' | jq
+kubectl get database myapp-database -o jsonpath='{.spec.connectionString}' | jq
+kubectl get database myapp-database -o jsonpath='{.spec.secretBackend}' | jq
 ```
-
-Look for either:
-- `connectionStringSecretRef`: Using Kubernetes
-- `connectionStringAWSSecretRef`: Using AWS
 
 ## Rate Limiting / Exponential Backoff
 
