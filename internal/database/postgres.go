@@ -200,15 +200,21 @@ func (c *PostgresClient) CreateUser(ctx context.Context, username, password stri
 			return fmt.Errorf("failed to create user: %w", err)
 		}
 
-		// Grant the new user to the current admin role so we can SET ROLE to it.
-		// CURRENT_USER is rejected as a role-recipient by some managed PG providers
-		// (Scaleway managed RDB raises XX000 "cannot use special role specifier"),
-		// so resolve it to a literal role name first.
+		// Grant new user to admin with INHERIT + SET so CREATE/ALTER DATABASE
+		// ... OWNER works on PG 16+ (defaults changed to NOINHERIT, NOSET).
+		// Resolve CURRENT_USER to a literal name first (some managed PG
+		// providers reject CURRENT_USER as a special role specifier — XX000).
+		// Aurora/RDS auto-grant these flags via an event trigger; Scaleway
+		// managed RDB and self-hosted PG 16+ do not.
 		var adminRole string
 		if err := c.db.QueryRowContext(ctx, "SELECT current_user").Scan(&adminRole); err != nil {
 			return fmt.Errorf("failed to resolve current admin role: %w", err)
 		}
-		grantQuery := fmt.Sprintf("GRANT %s TO %s", quoteIdentifier(username), quoteIdentifier(adminRole))
+		grantQuery := fmt.Sprintf(
+			"GRANT %s TO %s WITH INHERIT TRUE, SET TRUE",
+			quoteIdentifier(username),
+			quoteIdentifier(adminRole),
+		)
 		if _, err := c.db.ExecContext(ctx, grantQuery); err != nil {
 			return fmt.Errorf("failed to grant user to admin (%s): %w", adminRole, err)
 		}
