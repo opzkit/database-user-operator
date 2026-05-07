@@ -21,10 +21,12 @@ metadata:
 data:
   init.sql: |
     -- Non-superuser admin for the operator. Mirrors managed-PG providers
-    -- (Scaleway managed RDB, self-hosted PG 16+ without RDS-style event
-    -- triggers) where the admin role has CREATEDB+CREATEROLE but not
-    -- SUPERUSER, so the SET ROLE / WITH SET grant defaults actually bite.
-    CREATE ROLE dbuo_admin WITH LOGIN PASSWORD 'dbuo_admin_pw' CREATEDB CREATEROLE NOSUPERUSER NOINHERIT;
+    -- (AWS rds_superuser, Scaleway _rdb_superadmin, Aurora) where the
+    -- admin role has CREATEDB+CREATEROLE+INHERIT but not SUPERUSER, so
+    -- the SET ROLE / WITH SET grant defaults actually bite on PG 16+
+    -- while the admin still inherits ownership privileges of any role
+    -- it is granted membership in (needed for COMMENT/DROP DATABASE).
+    CREATE ROLE dbuo_admin WITH LOGIN PASSWORD 'dbuo_admin_pw' CREATEDB CREATEROLE NOSUPERUSER INHERIT;
 ---
 apiVersion: v1
 kind: Secret
