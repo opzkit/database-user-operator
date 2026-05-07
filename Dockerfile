@@ -4,6 +4,9 @@ FROM golang:1.26-alpine@sha256:f85330846cde1e57ca9ec309382da3b8e6ae3ab943d273950
 ARG TARGETOS
 ARG TARGETARCH
 ARG ENABLE_COVERAGE=false
+ARG VERSION=dev
+ARG GIT_COMMIT=none
+ARG BUILD_DATE=unknown
 
 WORKDIR /workspace
 
@@ -20,11 +23,12 @@ COPY cmd/ cmd/
 COPY api/ api/
 COPY internal/ internal/
 
-# Build with optional coverage instrumentation
-RUN if [ "$ENABLE_COVERAGE" = "true" ]; then \
-      CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -cover -covermode=atomic -tags=cover -a -o manager ./cmd/manager; \
+# Build with optional coverage instrumentation. Build metadata stamped via -ldflags.
+RUN LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" && \
+    if [ "$ENABLE_COVERAGE" = "true" ]; then \
+      CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -cover -covermode=atomic -tags=cover -a -ldflags "$LDFLAGS" -o manager ./cmd/manager; \
     else \
-      CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager ./cmd/manager; \
+      CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -ldflags "$LDFLAGS" -o manager ./cmd/manager; \
     fi
 
 # Use distroless as minimal base image to package the manager binary

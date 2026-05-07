@@ -22,6 +22,11 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+
+	// Build metadata, populated at link time via -ldflags "-X main.<var>=...".
+	version   = "dev"
+	gitCommit = "none"
+	buildDate = "unknown"
 )
 
 func init() {
@@ -43,6 +48,11 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	setupLog.Info("starting database-user-operator",
+		"version", version,
+		"gitCommit", gitCommit,
+		"buildDate", buildDate)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
