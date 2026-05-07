@@ -114,7 +114,7 @@ jobs:
           bin/kustomize build config/default > database-user-operator.yaml
 
       - name: Upload release manifests
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
         with:
           files: database-user-operator.yaml
         env:
@@ -178,7 +178,7 @@ jobs:
           helm push database-user-operator-${CHART_VERSION}.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
       - name: Upload chart to GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
         with:
           files: database-user-operator-${{ steps.version.outputs.version }}.tgz
         env:
