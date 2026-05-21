@@ -12,7 +12,7 @@ require (
 	github.com/infisical/go-sdk v0.7.1
 	github.com/lib/pq v1.12.3
 	github.com/onsi/ginkgo/v2 v2.29.0
-	github.com/onsi/gomega v1.40.0
+	github.com/onsi/gomega v1.41.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.36
 	k8s.io/api v0.36.1
