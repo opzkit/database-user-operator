@@ -125,11 +125,11 @@ func parseScalewayRegion(region string) (scw.Region, error) {
 // path `/`. Scaleway accepts [A-Za-z0-9-_.] in names and arbitrary
 // `/`-separated folder paths.
 //
-//	"rds/postgres/foo"   -> ("/rds/postgres/", "foo")
-//	"/rds/postgres/foo"  -> ("/rds/postgres/", "foo")
-//	"/rds/postgres/foo/" -> ("/rds/postgres/", "foo")
-//	"foo"                -> ("/",              "foo")
-//	""                   -> ("/",              "")
+//	"rds/postgres/foo"   -> ("/rds/postgres", "foo")
+//	"/rds/postgres/foo"  -> ("/rds/postgres", "foo")
+//	"/rds/postgres/foo/" -> ("/rds/postgres", "foo")
+//	"foo"                -> ("/",             "foo")
+//	""                   -> ("/",             "")
 func scalewayPathAndName(input string) (string, string) {
 	trimmed := strings.Trim(input, "/")
 	if trimmed == "" {
@@ -139,7 +139,7 @@ func scalewayPathAndName(input string) (string, string) {
 	if idx < 0 {
 		return "/", trimmed
 	}
-	return "/" + trimmed[:idx] + "/", trimmed[idx+1:]
+	return "/" + trimmed[:idx], trimmed[idx+1:]
 }
 
 // scalewayLegacyName reproduces the pre-path sanitisation (slashes
@@ -156,7 +156,12 @@ func scalewayLegacyName(name string) string {
 // independent of the secret's UUID at lookup time.
 func (b *ScalewayBackend) locator(name string) string {
 	path, n := scalewayPathAndName(name)
-	return fmt.Sprintf("scaleway://%s/%s%s%s", b.region, b.projectID, path, n)
+	sep := "/"
+	if path == "/" {
+		// Root path already supplies the separator — avoid `//<name>`.
+		sep = ""
+	}
+	return fmt.Sprintf("scaleway://%s/%s%s%s%s", b.region, b.projectID, path, sep, n)
 }
 
 // findSecret looks up a Scaleway Secret by (Path, Name, project).
