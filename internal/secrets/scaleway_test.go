@@ -194,8 +194,8 @@ func TestScalewayBackend_Create_NewSecret(t *testing.T) {
 		t.Errorf("locator = %q", loc)
 	}
 	for _, s := range fake.secrets {
-		if s.Name != "foo" || s.Path != "/rds/postgres/" {
-			t.Errorf("(name, path) = (%q, %q), want (\"foo\", \"/rds/postgres/\")", s.Name, s.Path)
+		if s.Name != "foo" || s.Path != "/rds/postgres" {
+			t.Errorf("(name, path) = (%q, %q), want (\"foo\", \"/rds/postgres\")", s.Name, s.Path)
 		}
 	}
 	if ver != "1" {
@@ -358,13 +358,13 @@ func TestScalewayBackend_PathAndNameSplit(t *testing.T) {
 		wantPath string
 		wantName string
 	}{
-		{"rds/postgres/foo", "/rds/postgres/", "foo"},
-		{"/rds/postgres/foo", "/rds/postgres/", "foo"},
-		{"/rds/postgres/foo/", "/rds/postgres/", "foo"},
+		{"rds/postgres/foo", "/rds/postgres", "foo"},
+		{"/rds/postgres/foo", "/rds/postgres", "foo"},
+		{"/rds/postgres/foo/", "/rds/postgres", "foo"},
 		{"foo", "/", "foo"},
 		{"", "/", ""},
 		{"/", "/", ""},
-		{"a/b", "/a/", "b"},
+		{"a/b", "/a", "b"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -390,9 +390,42 @@ func TestScalewayBackend_Create_WritesAtPath(t *testing.T) {
 		if s.Name != "myapp" {
 			t.Errorf("name = %q, want myapp", s.Name)
 		}
-		if s.Path != "/rds/postgres/" {
-			t.Errorf("path = %q, want /rds/postgres/", s.Path)
+		if s.Path != "/rds/postgres" {
+			t.Errorf("path = %q, want /rds/postgres", s.Path)
 		}
+	}
+}
+
+// Regression: on a second reconcile the existence check has to find
+// the Secret the operator wrote on the first reconcile, otherwise the
+// operator loops forever attempting CreateSecret and Scaleway returns
+// "name is wrongly formatted, cannot have same secret name in same
+// path". Pre-fix the path-and-name split produced "/rds/postgres/"
+// (trailing slash) for both the Create request and the subsequent
+// find filter; Scaleway normalised the stored Path to "/rds/postgres"
+// and the in-code `s.Path == path` comparison rejected the hit.
+func TestScalewayBackend_FindAfterCreate(t *testing.T) {
+	fake := newFakeScalewayClient()
+	b := newScalewayTestBackend(fake)
+
+	if _, _, err := b.Create(context.Background(), "rds/postgres/chemcat", "", sampleDBSecret(), nil, ""); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	ok, err := b.Exists(context.Background(), "rds/postgres/chemcat")
+	if err != nil {
+		t.Fatalf("Exists: %v", err)
+	}
+	if !ok {
+		t.Fatalf("Exists after Create returned false — operator would loop on CreateSecret")
+	}
+
+	got, err := b.Get(context.Background(), "rds/postgres/chemcat")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.DBHost != "pg.example.com" {
+		t.Errorf("Get returned wrong payload: DBHost = %q", got.DBHost)
 	}
 }
 
