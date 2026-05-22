@@ -8,6 +8,7 @@ See LICENSE file in the project root for full license information.
 package controller
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1022,8 +1023,11 @@ func (r *DatabaseReconciler) getConnectionStringFromScalewaySecret(ctx context.C
 	// If the payload looks like a JSON object, extract the configured
 	// key. Mirrors the AWS branch behaviour: callers can either store
 	// a single-string secret (raw DSN) or a JSON object with a named
-	// `connectionString` (or user-chosen) property.
-	if strings.Contains(value, "{") {
+	// `connectionString` (or user-chosen) property. Sniff by the first
+	// non-whitespace byte rather than `Contains("{")` — a raw DSN can
+	// legitimately embed `{` (e.g. inside a password), and a substring
+	// match would route it down the JSON branch and fail unmarshal.
+	if bytes.HasPrefix(bytes.TrimSpace(payload), []byte("{")) {
 		var data map[string]interface{}
 		if err := json.Unmarshal(payload, &data); err != nil {
 			return "", fmt.Errorf("failed to parse Scaleway secret payload as JSON: %w", err)
