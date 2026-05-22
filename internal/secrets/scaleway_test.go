@@ -59,6 +59,9 @@ func (f *fakeScalewayClient) ListSecrets(req *smapi.ListSecretsRequest, _ ...scw
 		if req.ProjectID != nil && s.ProjectID != *req.ProjectID {
 			continue
 		}
+		if req.Path != nil && s.Path != *req.Path {
+			continue
+		}
 		out.Secrets = append(out.Secrets, s)
 	}
 	out.TotalCount = uint64(len(out.Secrets))
@@ -76,10 +79,15 @@ func (f *fakeScalewayClient) CreateSecret(req *smapi.CreateSecretRequest, _ ...s
 	if req.Description != nil {
 		desc = *req.Description
 	}
+	path := "/"
+	if req.Path != nil {
+		path = *req.Path
+	}
 	s := &smapi.Secret{
 		ID:          id,
 		ProjectID:   req.ProjectID,
 		Name:        req.Name,
+		Path:        path,
 		Tags:        append([]string(nil), req.Tags...),
 		Description: &desc,
 		Region:      req.Region,
@@ -182,8 +190,13 @@ func TestScalewayBackend_Create_NewSecret(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if loc != "scaleway://fr-par/proj-uuid/rds_postgres_foo" {
+	if loc != "scaleway://fr-par/proj-uuid/rds/postgres/foo" {
 		t.Errorf("locator = %q", loc)
+	}
+	for _, s := range fake.secrets {
+		if s.Name != "foo" || s.Path != "/rds/postgres/" {
+			t.Errorf("(name, path) = (%q, %q), want (\"foo\", \"/rds/postgres/\")", s.Name, s.Path)
+		}
 	}
 	if ver != "1" {
 		t.Errorf("version = %q, want 1", ver)
@@ -339,17 +352,86 @@ func TestScalewayBackend_SyncTags_NotFound(t *testing.T) {
 	}
 }
 
-func TestScalewayBackend_NameSanitisation(t *testing.T) {
+func TestScalewayBackend_PathAndNameSplit(t *testing.T) {
+	cases := []struct {
+		in       string
+		wantPath string
+		wantName string
+	}{
+		{"rds/postgres/foo", "/rds/postgres/", "foo"},
+		{"/rds/postgres/foo", "/rds/postgres/", "foo"},
+		{"/rds/postgres/foo/", "/rds/postgres/", "foo"},
+		{"foo", "/", "foo"},
+		{"", "/", ""},
+		{"/", "/", ""},
+		{"a/b", "/a/", "b"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			gotPath, gotName := scalewayPathAndName(tc.in)
+			if gotPath != tc.wantPath || gotName != tc.wantName {
+				t.Errorf("scalewayPathAndName(%q) = (%q, %q), want (%q, %q)",
+					tc.in, gotPath, gotName, tc.wantPath, tc.wantName)
+			}
+		})
+	}
+}
+
+func TestScalewayBackend_Create_WritesAtPath(t *testing.T) {
 	fake := newFakeScalewayClient()
 	b := newScalewayTestBackend(fake)
 	if _, _, err := b.Create(context.Background(), "/rds/postgres/myapp/", "", sampleDBSecret(), nil, ""); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
+	if len(fake.secrets) != 1 {
+		t.Fatalf("expected 1 secret, got %d", len(fake.secrets))
+	}
 	for _, s := range fake.secrets {
-		if s.Name != "rds_postgres_myapp" {
-			t.Errorf("sanitised name = %q, want rds_postgres_myapp", s.Name)
+		if s.Name != "myapp" {
+			t.Errorf("name = %q, want myapp", s.Name)
+		}
+		if s.Path != "/rds/postgres/" {
+			t.Errorf("path = %q, want /rds/postgres/", s.Path)
 		}
 	}
+}
+
+func TestScalewayBackend_LegacyReadFallback(t *testing.T) {
+	fake := newFakeScalewayClient()
+	b := newScalewayTestBackend(fake)
+
+	// Seed the fake with a legacy secret (root path, flattened name)
+	// as a pre-path operator release would have written it.
+	legacyName := "rds_postgres_legacy"
+	fake.idCounter++
+	id := "secret-id-legacy"
+	fake.secrets[id] = &smapi.Secret{
+		ID:        id,
+		ProjectID: "proj-uuid",
+		Name:      legacyName,
+		Path:      "/",
+		Region:    scw.RegionFrPar,
+	}
+	fake.versions[id] = [][]byte{mustJSON(t, sampleDBSecret())}
+
+	// Lookup using the path-style logical name should hit the legacy
+	// secret via the read-side fallback.
+	got, err := b.Get(context.Background(), "rds/postgres/legacy")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.DBHost != "pg.example.com" {
+		t.Errorf("DBHost = %q, want pg.example.com", got.DBHost)
+	}
+}
+
+func mustJSON(t *testing.T, s *DatabaseSecret) []byte {
+	t.Helper()
+	b, err := s.ToJSONWithTemplate("")
+	if err != nil {
+		t.Fatalf("ToJSONWithTemplate: %v", err)
+	}
+	return b
 }
 
 func TestScalewayBackend_NewBackend_Validation(t *testing.T) {

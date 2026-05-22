@@ -42,9 +42,20 @@ type ScalewaySMClient interface {
 
 // ScalewayBackend stores generated database credentials in Scaleway
 // Secret Manager. The DatabaseSecret JSON blob is stored verbatim as
-// the version payload on a Scaleway Secret named after a sanitised
-// version of the supplied name (slashes replaced with underscores so
-// the result is a valid Scaleway Secret name).
+// the version payload on a Scaleway Secret.
+//
+// The supplied `spec.secretName` is split on the last `/` into
+// (Path, Name): leading segments become the Scaleway Secret Path
+// (folder), the trailing segment is the Secret Name. This matches
+// the AWS Secrets Manager backend, where slashes stay in the literal
+// name — both backends therefore land at the same logical location
+// (default `rds/postgres/<dbName>`).
+//
+// For backwards compatibility with secrets previously written by
+// pre-path versions of this operator (slashes flattened to `_`),
+// findSecret falls back to a legacy sanitised-name lookup at root
+// path when the path-style lookup misses. New writes always use the
+// path-aware shape.
 //
 // Each Update creates a new SecretVersion; the returned version string
 // is the SecretVersion Revision (1-based monotonic).
@@ -106,36 +117,90 @@ func parseScalewayRegion(region string) (scw.Region, error) {
 	return r, nil
 }
 
-// scalewayName normalises an arbitrary "secret name" (which may include
-// slashes from the AWS-style rds/<engine>/<db> default) into a valid
-// Scaleway Secret name. Scaleway accepts [A-Za-z0-9-_.] in names.
-func scalewayName(name string) string {
+// scalewayPathAndName splits an arbitrary "secret name" (which may
+// include slashes from the AWS-style rds/<engine>/<db> default) into
+// the (Path, Name) pair Scaleway Secret Manager uses. The last
+// `/`-segment is the Name; everything before it (leading + trailing
+// `/` enforced) is the Path. Single-segment input lands at root
+// path `/`. Scaleway accepts [A-Za-z0-9-_.] in names and arbitrary
+// `/`-separated folder paths.
+//
+//	"rds/postgres/foo"   -> ("/rds/postgres/", "foo")
+//	"/rds/postgres/foo"  -> ("/rds/postgres/", "foo")
+//	"/rds/postgres/foo/" -> ("/rds/postgres/", "foo")
+//	"foo"                -> ("/",              "foo")
+//	""                   -> ("/",              "")
+func scalewayPathAndName(input string) (string, string) {
+	trimmed := strings.Trim(input, "/")
+	if trimmed == "" {
+		return "/", ""
+	}
+	idx := strings.LastIndex(trimmed, "/")
+	if idx < 0 {
+		return "/", trimmed
+	}
+	return "/" + trimmed[:idx] + "/", trimmed[idx+1:]
+}
+
+// scalewayLegacyName reproduces the pre-path sanitisation (slashes
+// flattened to underscores) used by older releases of this operator.
+// Retained for read-side fallback so existing Secrets remain findable
+// after upgrade.
+func scalewayLegacyName(name string) string {
 	n := strings.Trim(name, "/")
-	n = strings.ReplaceAll(n, "/", "_")
-	return n
+	return strings.ReplaceAll(n, "/", "_")
 }
 
 // locator returns a stable backend-specific identifier for the secret.
-// Uses (region, projectID, sanitised-name) so it stays human-readable
-// and is independent of the secret's UUID at lookup time.
+// Uses (region, projectID, path+name) so it stays human-readable and is
+// independent of the secret's UUID at lookup time.
 func (b *ScalewayBackend) locator(name string) string {
-	return fmt.Sprintf("scaleway://%s/%s/%s", b.region, b.projectID, scalewayName(name))
+	path, n := scalewayPathAndName(name)
+	return fmt.Sprintf("scaleway://%s/%s%s%s", b.region, b.projectID, path, n)
 }
 
-// findSecret looks up a Scaleway Secret by name+project. Returns
-// (*smapi.Secret, true, nil) on hit, (nil, false, nil) on miss.
+// findSecret looks up a Scaleway Secret by (Path, Name, project).
+// On a miss, falls back to a legacy sanitised-name lookup at root
+// path so secrets written by pre-path operator versions remain
+// readable. Returns (*smapi.Secret, true, nil) on hit,
+// (nil, false, nil) on miss.
 func (b *ScalewayBackend) findSecret(ctx context.Context, name string) (*smapi.Secret, bool, error) {
-	n := scalewayName(name)
+	path, n := scalewayPathAndName(name)
 	resp, err := b.client.ListSecrets(&smapi.ListSecretsRequest{
 		Region:    b.region,
 		ProjectID: &b.projectID,
 		Name:      &n,
+		Path:      &path,
 	}, scw.WithContext(ctx))
 	if err != nil {
 		return nil, false, fmt.Errorf("scaleway list-secrets failed: %w", err)
 	}
 	for _, s := range resp.Secrets {
-		if s.Name == n {
+		if s.Name == n && s.Path == path {
+			return s, true, nil
+		}
+	}
+
+	// Legacy fallback: pre-path releases wrote secrets at root path
+	// with `/` flattened to `_`. Only consult when the path-style
+	// lookup truly missed and the legacy form differs from the
+	// path-style name (i.e. the input contained at least one `/`).
+	legacy := scalewayLegacyName(name)
+	if legacy == n {
+		return nil, false, nil
+	}
+	rootPath := "/"
+	resp, err = b.client.ListSecrets(&smapi.ListSecretsRequest{
+		Region:    b.region,
+		ProjectID: &b.projectID,
+		Name:      &legacy,
+		Path:      &rootPath,
+	}, scw.WithContext(ctx))
+	if err != nil {
+		return nil, false, fmt.Errorf("scaleway list-secrets (legacy) failed: %w", err)
+	}
+	for _, s := range resp.Secrets {
+		if s.Name == legacy && (s.Path == rootPath || s.Path == "") {
 			return s, true, nil
 		}
 	}
@@ -206,10 +271,12 @@ func (b *ScalewayBackend) Create(ctx context.Context, name, description string, 
 			return "", "", fmt.Errorf("scaleway update-secret (description/tags) failed: %w", err)
 		}
 	} else {
+		path, n := scalewayPathAndName(name)
 		createReq := &smapi.CreateSecretRequest{
 			Region:    b.region,
 			ProjectID: b.projectID,
-			Name:      scalewayName(name),
+			Name:      n,
+			Path:      &path,
 			Tags:      tagsToScalewaySlice(tags),
 		}
 		if description != "" {
