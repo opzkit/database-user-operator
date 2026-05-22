@@ -137,6 +137,64 @@ spec:
                     required:
                     - name
                     type: object
+                  scaleway:
+                    description: |-
+                      Scaleway reads the connection string from a Scaleway Secret Manager
+                      secret. Authentication reuses the same IAM API key shape consumed
+                      by `secretBackend.scaleway` (a same-namespace Kubernetes Secret
+                      with `access_key` and `secret_key` data keys) so a single Secret
+                      can back both the admin-DSN lookup and the per-database credential
+                      write.
+                    properties:
+                      authSecretRef:
+                        description: |-
+                          AuthSecretRef references a Kubernetes Secret in the same
+                          namespace as the Database holding `access_key` and `secret_key`
+                          data keys for the Scaleway IAM API key. Same shape as
+                          `secretBackend.scaleway.authSecretRef` so a single Secret can
+                          back both the admin-DSN read and the per-DB credential write.
+                        properties:
+                          name:
+                            description: Name of the Secret.
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      key:
+                        description: |-
+                          Key within the secret JSON. Defaults to "connectionString". If
+                          the secret payload is not JSON the Key is ignored and the raw
+                          value is returned (matches the AWS backend behaviour).
+                        type: string
+                      name:
+                        description: |-
+                          Name is the Scaleway Secret name (leaf). Must match Scaleway's
+                          name regex (`^[_a-zA-Z0-9]([-_.a-zA-Z0-9]*[_a-zA-Z0-9])?$`) — no
+                          slashes.
+                        type: string
+                      path:
+                        default: /
+                        description: |-
+                          Path is the Scaleway Secret Path (folder). Defaults to "/" if
+                          omitted. Match the leading-slash form Scaleway stores it as.
+                        type: string
+                      projectID:
+                        description: ProjectID is the Scaleway Project UUID owning
+                          the secret.
+                        type: string
+                      region:
+                        description: Region is the Scaleway region for Secret Manager.
+                        enum:
+                        - fr-par
+                        - nl-ams
+                        - pl-waw
+                        type: string
+                    required:
+                    - authSecretRef
+                    - name
+                    - projectID
+                    - region
+                    type: object
                 type: object
               databaseName:
                 description: DatabaseName is the name of the database to create

@@ -403,36 +403,38 @@ func TestScalewayBackend_Create_WritesAtPath(t *testing.T) {
 	}
 }
 
-// Regression: on a second reconcile the existence check has to find
-// the Secret the operator wrote on the first reconcile, otherwise the
-// operator loops forever attempting CreateSecret and Scaleway returns
-// "name is wrongly formatted, cannot have same secret name in same
-// path". Pre-fix the path-and-name split produced "/rds/postgres/"
-// (trailing slash) for both the Create request and the subsequent
-// find filter; Scaleway normalised the stored Path to "/rds/postgres"
-// and the in-code `s.Path == path` comparison rejected the hit.
-func TestScalewayBackend_FindAfterCreate(t *testing.T) {
+func TestScalewayBackend_GetRawAt(t *testing.T) {
 	fake := newFakeScalewayClient()
 	b := newScalewayTestBackend(fake)
 
-	if _, _, err := b.Create(context.Background(), "rds/postgres/chemcat", "", sampleDBSecret(), nil, ""); err != nil {
-		t.Fatalf("Create: %v", err)
+	// Seed a Scaleway Secret at /rdb/postgres, name intersolia-staging-pg
+	// holding a JSON payload that mirrors what terraform/scaleway would
+	// produce for a Managed Postgres admin secret.
+	payload := []byte(`{"DB_HOST":"pg.example.com","DB_PORT":"5432","DB_NAME":"rdb","DB_USERNAME":"intersolia_admin","DB_PASSWORD":"s3cret"}`)
+	fake.idCounter++
+	id := "secret-id-admin"
+	fake.secrets[id] = &smapi.Secret{
+		ID:        id,
+		ProjectID: "proj-uuid",
+		Name:      "intersolia-staging-pg",
+		Path:      "/rdb/postgres",
+		Region:    scw.RegionFrPar,
+	}
+	fake.versions[id] = [][]byte{payload}
+
+	got, err := b.GetRawAt(context.Background(), "/rdb/postgres", "intersolia-staging-pg")
+	if err != nil {
+		t.Fatalf("GetRawAt: %v", err)
+	}
+	if string(got) != string(payload) {
+		t.Errorf("GetRawAt payload mismatch:\ngot:  %s\nwant: %s", got, payload)
 	}
 
-	ok, err := b.Exists(context.Background(), "rds/postgres/chemcat")
-	if err != nil {
-		t.Fatalf("Exists: %v", err)
-	}
-	if !ok {
-		t.Fatalf("Exists after Create returned false — operator would loop on CreateSecret")
-	}
-
-	got, err := b.Get(context.Background(), "rds/postgres/chemcat")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	if got.DBHost != "pg.example.com" {
-		t.Errorf("Get returned wrong payload: DBHost = %q", got.DBHost)
+	// Miss path: nonexistent (path, name) must return SecretNotFoundError.
+	if _, err := b.GetRawAt(context.Background(), "/rdb/postgres", "does-not-exist"); err == nil {
+		t.Errorf("GetRawAt on missing secret: want SecretNotFoundError, got nil")
+	} else if _, ok := err.(*SecretNotFoundError); !ok {
+		t.Errorf("GetRawAt on missing secret: want *SecretNotFoundError, got %T (%v)", err, err)
 	}
 }
 

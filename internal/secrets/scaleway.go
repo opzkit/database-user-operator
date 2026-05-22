@@ -242,6 +242,47 @@ func (b *ScalewayBackend) Get(ctx context.Context, name string) (*DatabaseSecret
 	return &dbSecret, nil
 }
 
+// GetRawAt fetches the raw payload of the latest enabled version of
+// the Scaleway Secret addressed by (path, name). Unlike Get, the
+// payload is returned verbatim — no DatabaseSecret unmarshal — so
+// callers reading admin-DSN secrets that were not written by this
+// operator can parse arbitrary shapes.
+//
+// Returns SecretNotFoundError when the secret does not exist; the
+// returned locator uses the supplied (path, name) directly rather
+// than the path-split heuristic so error messages match what the
+// caller asked for.
+func (b *ScalewayBackend) GetRawAt(ctx context.Context, path, name string) ([]byte, error) {
+	resp, err := b.client.ListSecrets(&smapi.ListSecretsRequest{
+		Region:    b.region,
+		ProjectID: &b.projectID,
+		Name:      &name,
+		Path:      &path,
+	}, scw.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("scaleway list-secrets failed: %w", err)
+	}
+	var secret *smapi.Secret
+	for _, s := range resp.Secrets {
+		if s.Name == name && s.Path == path {
+			secret = s
+			break
+		}
+	}
+	if secret == nil {
+		return nil, &SecretNotFoundError{SecretName: fmt.Sprintf("scaleway://%s/%s%s/%s", b.region, b.projectID, strings.TrimRight(path, "/"), name)}
+	}
+	access, err := b.client.AccessSecretVersion(&smapi.AccessSecretVersionRequest{
+		Region:   b.region,
+		SecretID: secret.ID,
+		Revision: "latest_enabled",
+	}, scw.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("scaleway access-secret-version failed: %w", err)
+	}
+	return access.Data, nil
+}
+
 // Create implements Backend. If a Secret with this name already exists
 // (including soft-deleted state — Scaleway has no soft-delete window for
 // SM, so this just means the resource is present), Create overwrites by

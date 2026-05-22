@@ -892,6 +892,16 @@ func (r *DatabaseReconciler) getConnectionString(ctx context.Context, db *databa
 		return r.getConnectionStringFromK8sSecret(ctx, db)
 	}
 
+	if db.Spec.ConnectionString.Scaleway != nil {
+		swRef := db.Spec.ConnectionString.Scaleway
+		logger.Info("Using Scaleway Secret Manager for admin connection string",
+			"database", db.Spec.DatabaseName,
+			"region", swRef.Region,
+			"path", swRef.Path,
+			"name", swRef.Name)
+		return r.getConnectionStringFromScalewaySecret(ctx, db)
+	}
+
 	// Must be AWS secret (already validated)
 	logger.Info("Using AWS Secrets Manager for admin connection string",
 		"database", db.Spec.DatabaseName,
@@ -969,14 +979,93 @@ func (r *DatabaseReconciler) getConnectionStringFromAWSSecret(ctx context.Contex
 	return secretValue, nil
 }
 
+func (r *DatabaseReconciler) getConnectionStringFromScalewaySecret(ctx context.Context, db *databasev1alpha1.Database) (string, error) {
+	logger := log.FromContext(ctx)
+	swRef := db.Spec.ConnectionString.Scaleway
+
+	// Read the IAM auth Secret from the same namespace as the Database.
+	authSecret := &corev1.Secret{}
+	if err := r.Get(ctx, client.ObjectKey{Name: swRef.AuthSecretRef.Name, Namespace: db.Namespace}, authSecret); err != nil {
+		return "", fmt.Errorf("failed to read scaleway auth Secret %s/%s: %w", db.Namespace, swRef.AuthSecretRef.Name, err)
+	}
+	accessKey := string(authSecret.Data["access_key"])
+	secretKey := string(authSecret.Data["secret_key"])
+	if accessKey == "" || secretKey == "" {
+		return "", fmt.Errorf("scaleway auth Secret %s/%s missing access_key or secret_key data", db.Namespace, swRef.AuthSecretRef.Name)
+	}
+
+	logger.Info("Creating Scaleway Secret Manager client for admin credentials",
+		"database", db.Spec.DatabaseName,
+		"region", swRef.Region,
+		"projectID", swRef.ProjectID)
+	backend, err := secrets.NewScalewayBackend(swRef.Region, swRef.ProjectID, secrets.ScalewayAuth{AccessKey: accessKey, SecretKey: secretKey})
+	if err != nil {
+		return "", fmt.Errorf("failed to construct scaleway client for admin connection string: %w", err)
+	}
+
+	path := swRef.Path
+	if path == "" {
+		path = "/"
+	}
+	logger.Info("Retrieving admin connection string from Scaleway Secret Manager",
+		"database", db.Spec.DatabaseName,
+		"path", path,
+		"name", swRef.Name)
+	payload, err := backend.GetRawAt(ctx, path, swRef.Name)
+	if err != nil {
+		return "", fmt.Errorf("failed to get secret %s/%s from Scaleway Secret Manager (check IAM permissions and secret exists): %w", path, swRef.Name, err)
+	}
+
+	key := connectionStringKeyDefault(swRef.Key)
+	value := string(payload)
+
+	// If the payload looks like a JSON object, extract the configured
+	// key. Mirrors the AWS branch behaviour: callers can either store
+	// a single-string secret (raw DSN) or a JSON object with a named
+	// `connectionString` (or user-chosen) property.
+	if strings.Contains(value, "{") {
+		var data map[string]interface{}
+		if err := json.Unmarshal(payload, &data); err != nil {
+			return "", fmt.Errorf("failed to parse Scaleway secret payload as JSON: %w", err)
+		}
+		raw, ok := data[key]
+		if !ok {
+			return "", fmt.Errorf("key %s not found in Scaleway secret %s/%s", key, path, swRef.Name)
+		}
+		cs, ok := raw.(string)
+		if !ok {
+			return "", fmt.Errorf("value for key %s in Scaleway secret %s/%s is not a string", key, path, swRef.Name)
+		}
+		if cs == "" {
+			return "", fmt.Errorf("connection string is empty in Scaleway secret %s/%s key %s", path, swRef.Name, key)
+		}
+		return cs, nil
+	}
+
+	if value == "" {
+		return "", fmt.Errorf("connection string is empty in Scaleway secret %s/%s", path, swRef.Name)
+	}
+	return value, nil
+}
+
 // validateConnectionSource validates that exactly one connection string source is configured.
 func validateConnectionSource(db *databasev1alpha1.Database) error {
 	cs := db.Spec.ConnectionString
-	if cs.Kubernetes != nil && cs.AWS != nil {
-		return fmt.Errorf("both connectionString.kubernetes and connectionString.aws are specified, only one is allowed")
+	set := 0
+	if cs.AWS != nil {
+		set++
 	}
-	if cs.Kubernetes == nil && cs.AWS == nil {
-		return fmt.Errorf("neither connectionString.kubernetes nor connectionString.aws is specified")
+	if cs.Kubernetes != nil {
+		set++
+	}
+	if cs.Scaleway != nil {
+		set++
+	}
+	if set > 1 {
+		return fmt.Errorf("multiple connectionString sources specified, only one is allowed (aws, kubernetes, scaleway)")
+	}
+	if set == 0 {
+		return fmt.Errorf("no connectionString source specified (set one of: aws, kubernetes, scaleway)")
 	}
 	return nil
 }
