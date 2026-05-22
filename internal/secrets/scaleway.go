@@ -125,11 +125,11 @@ func parseScalewayRegion(region string) (scw.Region, error) {
 // path `/`. Scaleway accepts [A-Za-z0-9-_.] in names and arbitrary
 // `/`-separated folder paths.
 //
-//	"rds/postgres/foo"   -> ("/rds/postgres/", "foo")
-//	"/rds/postgres/foo"  -> ("/rds/postgres/", "foo")
-//	"/rds/postgres/foo/" -> ("/rds/postgres/", "foo")
-//	"foo"                -> ("/",              "foo")
-//	""                   -> ("/",              "")
+//	"rds/postgres/foo"   -> ("/rds/postgres", "foo")
+//	"/rds/postgres/foo"  -> ("/rds/postgres", "foo")
+//	"/rds/postgres/foo/" -> ("/rds/postgres", "foo")
+//	"foo"                -> ("/",             "foo")
+//	""                   -> ("/",             "")
 func scalewayPathAndName(input string) (string, string) {
 	trimmed := strings.Trim(input, "/")
 	if trimmed == "" {

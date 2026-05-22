@@ -79,9 +79,16 @@ func (f *fakeScalewayClient) CreateSecret(req *smapi.CreateSecretRequest, _ ...s
 	if req.Description != nil {
 		desc = *req.Description
 	}
+	// Mirror Scaleway Secret Manager's server-side normalisation:
+	// trailing `/` is stripped from non-root paths. Tests rely on this
+	// to catch the round-trip bug where Create wrote `/rds/postgres/`
+	// but ListSecrets later returned `/rds/postgres`.
 	path := "/"
 	if req.Path != nil {
-		path = *req.Path
+		path = strings.TrimRight(*req.Path, "/")
+		if path == "" {
+			path = "/"
+		}
 	}
 	s := &smapi.Secret{
 		ID:          id,
