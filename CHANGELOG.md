@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/opzkit/database-user-operator/compare/v0.3.0...v0.4.0) (2026-05-22)
+
+
+### Features
+
+* **scaleway:** write secrets to Scaleway native path + name ([#170](https://github.com/opzkit/database-user-operator/issues/170)) ([2036e01](https://github.com/opzkit/database-user-operator/commit/2036e01f0c5d6b83a77ea760fd4a1e00752ba0b2))
+
 ## [0.3.0](https://github.com/opzkit/database-user-operator/compare/v0.2.0...v0.3.0) (2026-05-22)
 
 
