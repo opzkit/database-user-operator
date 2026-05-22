@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.3.0](https://github.com/opzkit/database-user-operator/compare/v0.2.0...v0.3.0) (2026-05-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* pluggable secrets/connection backends (k8s, infisical, aws) ([#135](https://github.com/opzkit/database-user-operator/issues/135))
+
+### Features
+
+* pluggable secrets/connection backends (k8s, infisical, aws) ([#135](https://github.com/opzkit/database-user-operator/issues/135)) ([ccc44a8](https://github.com/opzkit/database-user-operator/commit/ccc44a851e906aa5afd1993228bd118c33b9b07a))
+* **secrets:** add Scaleway Secret Manager backend ([#152](https://github.com/opzkit/database-user-operator/issues/152)) ([8b5abde](https://github.com/opzkit/database-user-operator/commit/8b5abde49a43b1670342319fc8b164cdb781c219))
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.29.0 ([#165](https://github.com/opzkit/database-user-operator/issues/165)) ([f7ebd67](https://github.com/opzkit/database-user-operator/commit/f7ebd67d9de2b9467360966c6390b3baba7ec8b2))
+* **deps:** update module github.com/onsi/gomega to v1.41.0 ([#166](https://github.com/opzkit/database-user-operator/issues/166)) ([0089d95](https://github.com/opzkit/database-user-operator/commit/0089d958cdd1301900ceae6ac68259d701f01e27))
+* **deps:** update module k8s.io/api to v0.36.1 ([#161](https://github.com/opzkit/database-user-operator/issues/161)) ([5a17909](https://github.com/opzkit/database-user-operator/commit/5a1790989af6c43cc47a4324da943b1cb738e8b3))
+* **deps:** update module k8s.io/apimachinery to v0.36.1 ([#160](https://github.com/opzkit/database-user-operator/issues/160)) ([9db7efa](https://github.com/opzkit/database-user-operator/commit/9db7efa282ae7a15043375e3358a917ea622dcca))
+* **deps:** update module k8s.io/client-go to v0.36.1 ([#162](https://github.com/opzkit/database-user-operator/issues/162)) ([1232c17](https://github.com/opzkit/database-user-operator/commit/1232c170aa5ea6ffa13fc5e104bc99881d2f80a0))
+* **deps:** update module sigs.k8s.io/controller-runtime to v0.24.1 ([#158](https://github.com/opzkit/database-user-operator/issues/158)) ([1c4e481](https://github.com/opzkit/database-user-operator/commit/1c4e481e85dea1c3062184138942345251d637ef))
+
 ## [0.2.0](https://github.com/opzkit/database-user-operator/compare/v0.1.1...v0.2.0) (2026-05-07)
 
 
