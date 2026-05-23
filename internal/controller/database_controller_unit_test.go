@@ -268,7 +268,26 @@ func TestValidateConnectionSource(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "invalid - both configured",
+			name: "valid - only Scaleway secret",
+			db: &databasev1alpha1.Database{
+				Spec: databasev1alpha1.DatabaseSpec{
+					ConnectionString: databasev1alpha1.ConnectionStringSource{
+						Scaleway: &databasev1alpha1.ScalewayConnectionStringRef{
+							Region:    "fr-par",
+							ProjectID: "00000000-0000-0000-0000-000000000000",
+							Path:      "/rdb/postgres",
+							Name:      "intersolia-staging-pg",
+							AuthSecretRef: databasev1alpha1.KubernetesSecretRef{
+								Name: "scaleway-creds",
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid - both kubernetes and aws configured",
 			db: &databasev1alpha1.Database{
 				Spec: databasev1alpha1.DatabaseSpec{
 					ConnectionString: databasev1alpha1.ConnectionStringSource{
@@ -283,7 +302,30 @@ func TestValidateConnectionSource(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "both connectionString.kubernetes and connectionString.aws are specified",
+			errMsg:  "multiple connectionString sources specified",
+		},
+		{
+			name: "invalid - aws and scaleway configured",
+			db: &databasev1alpha1.Database{
+				Spec: databasev1alpha1.DatabaseSpec{
+					ConnectionString: databasev1alpha1.ConnectionStringSource{
+						AWS: &databasev1alpha1.AWSConnectionStringRef{
+							SecretName: "my-aws-secret",
+							Region:     "us-east-1",
+						},
+						Scaleway: &databasev1alpha1.ScalewayConnectionStringRef{
+							Region:    "fr-par",
+							ProjectID: "00000000-0000-0000-0000-000000000000",
+							Name:      "intersolia-staging-pg",
+							AuthSecretRef: databasev1alpha1.KubernetesSecretRef{
+								Name: "scaleway-creds",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "multiple connectionString sources specified",
 		},
 		{
 			name: "invalid - neither configured",
@@ -291,7 +333,7 @@ func TestValidateConnectionSource(t *testing.T) {
 				Spec: databasev1alpha1.DatabaseSpec{},
 			},
 			wantErr: true,
-			errMsg:  "neither connectionString.kubernetes nor connectionString.aws is specified",
+			errMsg:  "no connectionString source specified",
 		},
 	}
 

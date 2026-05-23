@@ -208,6 +208,15 @@ type ConnectionStringSource struct {
 	// +optional
 	AWS *AWSConnectionStringRef `json:"aws,omitempty"`
 
+	// Scaleway reads the connection string from a Scaleway Secret Manager
+	// secret. Authentication reuses the same IAM API key shape consumed
+	// by `secretBackend.scaleway` (a same-namespace Kubernetes Secret
+	// with `access_key` and `secret_key` data keys) so a single Secret
+	// can back both the admin-DSN lookup and the per-database credential
+	// write.
+	// +optional
+	Scaleway *ScalewayConnectionStringRef `json:"scaleway,omitempty"`
+
 	// Kubernetes reads the connection string from a Kubernetes Secret in
 	// the same namespace as the Database.
 	// +optional
@@ -239,6 +248,49 @@ type KubernetesConnectionStringRef struct {
 	// Key within the secret. Defaults to "connectionString".
 	// +optional
 	Key string `json:"key,omitempty"`
+}
+
+// ScalewayConnectionStringRef points at a Scaleway Secret Manager
+// secret holding the admin DSN. Path + Name address the SM secret
+// directly (Scaleway stores Path as a folder attribute separate from
+// Name — no path-split heuristic). Key selects a JSON property within
+// the secret's payload, or the raw payload is returned when the
+// payload isn't JSON.
+type ScalewayConnectionStringRef struct {
+	// Region is the Scaleway region for Secret Manager.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=fr-par;nl-ams;pl-waw
+	Region string `json:"region"`
+
+	// ProjectID is the Scaleway Project UUID owning the secret.
+	// +kubebuilder:validation:Required
+	ProjectID string `json:"projectID"`
+
+	// Path is the Scaleway Secret Path (folder). Defaults to "/" if
+	// omitted. Match the leading-slash form Scaleway stores it as.
+	// +optional
+	// +kubebuilder:default="/"
+	Path string `json:"path,omitempty"`
+
+	// Name is the Scaleway Secret name (leaf). Must match Scaleway's
+	// name regex (`^[_a-zA-Z0-9]([-_.a-zA-Z0-9]*[_a-zA-Z0-9])?$`) — no
+	// slashes.
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+
+	// Key within the secret JSON. Defaults to "connectionString". If
+	// the secret payload is not JSON the Key is ignored and the raw
+	// value is returned (matches the AWS backend behaviour).
+	// +optional
+	Key string `json:"key,omitempty"`
+
+	// AuthSecretRef references a Kubernetes Secret in the same
+	// namespace as the Database holding `access_key` and `secret_key`
+	// data keys for the Scaleway IAM API key. Same shape as
+	// `secretBackend.scaleway.authSecretRef` so a single Secret can
+	// back both the admin-DSN read and the per-DB credential write.
+	// +kubebuilder:validation:Required
+	AuthSecretRef KubernetesSecretRef `json:"authSecretRef"`
 }
 
 // KubernetesSecretRef is a generic reference to a Kubernetes Secret in

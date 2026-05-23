@@ -403,6 +403,53 @@ func TestScalewayBackend_Create_WritesAtPath(t *testing.T) {
 	}
 }
 
+func TestScalewayBackend_GetRawAt(t *testing.T) {
+	fake := newFakeScalewayClient()
+	b := newScalewayTestBackend(fake)
+
+	// Seed a Scaleway Secret at /rdb/postgres, name intersolia-staging-pg
+	// holding a JSON payload that mirrors what terraform/scaleway would
+	// produce for a Managed Postgres admin secret.
+	payload := []byte(`{"DB_HOST":"pg.example.com","DB_PORT":"5432","DB_NAME":"rdb","DB_USERNAME":"intersolia_admin","DB_PASSWORD":"s3cret"}`)
+	fake.idCounter++
+	id := "secret-id-admin"
+	fake.secrets[id] = &smapi.Secret{
+		ID:        id,
+		ProjectID: "proj-uuid",
+		Name:      "intersolia-staging-pg",
+		Path:      "/rdb/postgres",
+		Region:    scw.RegionFrPar,
+	}
+	fake.versions[id] = [][]byte{payload}
+
+	got, err := b.GetRawAt(context.Background(), "/rdb/postgres", "intersolia-staging-pg")
+	if err != nil {
+		t.Fatalf("GetRawAt: %v", err)
+	}
+	if string(got) != string(payload) {
+		t.Errorf("GetRawAt payload mismatch:\ngot:  %s\nwant: %s", got, payload)
+	}
+
+	// Miss path: nonexistent (path, name) must return SecretNotFoundError.
+	_, err = b.GetRawAt(context.Background(), "/rdb/postgres", "does-not-exist")
+	var nf *SecretNotFoundError
+	if !errors.As(err, &nf) {
+		t.Errorf("GetRawAt on missing secret: want *SecretNotFoundError, got %T (%v)", err, err)
+	}
+
+	// Trailing-slash tolerance: a caller-supplied "/rdb/postgres/"
+	// must canonicalise to "/rdb/postgres" before the ListSecrets
+	// filter, otherwise the round-trip bug class fixed in #172
+	// resurfaces on the read side.
+	got, err = b.GetRawAt(context.Background(), "/rdb/postgres/", "intersolia-staging-pg")
+	if err != nil {
+		t.Fatalf("GetRawAt with trailing-slash path: %v", err)
+	}
+	if string(got) != string(payload) {
+		t.Errorf("GetRawAt trailing-slash payload mismatch:\ngot:  %s\nwant: %s", got, payload)
+	}
+}
+
 // Regression: on a second reconcile the existence check has to find
 // the Secret the operator wrote on the first reconcile, otherwise the
 // operator loops forever attempting CreateSecret and Scaleway returns
@@ -411,6 +458,8 @@ func TestScalewayBackend_Create_WritesAtPath(t *testing.T) {
 // (trailing slash) for both the Create request and the subsequent
 // find filter; Scaleway normalised the stored Path to "/rds/postgres"
 // and the in-code `s.Path == path` comparison rejected the hit.
+// Originally added in #172; kept here so the round-trip stays
+// guarded independently of GetRawAt coverage.
 func TestScalewayBackend_FindAfterCreate(t *testing.T) {
 	fake := newFakeScalewayClient()
 	b := newScalewayTestBackend(fake)

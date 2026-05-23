@@ -142,6 +142,18 @@ func scalewayPathAndName(input string) (string, string) {
 	return "/" + trimmed[:idx], trimmed[idx+1:]
 }
 
+// canonicalScalewayPath normalises an arbitrary user-supplied path
+// (e.g. CR field, JSON config) to the leading-slash, no-trailing-
+// slash form Scaleway Secret Manager stores Paths as. Empty input
+// and "/" both collapse to "/".
+func canonicalScalewayPath(path string) string {
+	trimmed := strings.Trim(path, "/")
+	if trimmed == "" {
+		return "/"
+	}
+	return "/" + trimmed
+}
+
 // scalewayLegacyName reproduces the pre-path sanitisation (slashes
 // flattened to underscores) used by older releases of this operator.
 // Retained for read-side fallback so existing Secrets remain findable
@@ -240,6 +252,58 @@ func (b *ScalewayBackend) Get(ctx context.Context, name string) (*DatabaseSecret
 		return nil, fmt.Errorf("failed to unmarshal scaleway secret payload at %s: %w", b.locator(name), err)
 	}
 	return &dbSecret, nil
+}
+
+// GetRawAt fetches the raw payload of the latest enabled version of
+// the Scaleway Secret addressed by (path, name). Unlike Get, the
+// payload is returned verbatim — no DatabaseSecret unmarshal — so
+// callers reading admin-DSN secrets that were not written by this
+// operator can parse arbitrary shapes.
+//
+// Returns SecretNotFoundError when the secret does not exist; the
+// returned locator uses the supplied (path, name) directly rather
+// than the path-split heuristic so error messages match what the
+// caller asked for.
+//
+// `path` is canonicalised to the leading-slash, no-trailing-slash
+// form Scaleway stores it as, so a CR that specifies
+// `/rdb/postgres/` is accepted without reproducing the path-suffix
+// round-trip bug (the same class of issue fixed in #172).
+func (b *ScalewayBackend) GetRawAt(ctx context.Context, path, name string) ([]byte, error) {
+	path = canonicalScalewayPath(path)
+	resp, err := b.client.ListSecrets(&smapi.ListSecretsRequest{
+		Region:    b.region,
+		ProjectID: &b.projectID,
+		Name:      &name,
+		Path:      &path,
+	}, scw.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("scaleway list-secrets failed: %w", err)
+	}
+	var secret *smapi.Secret
+	for _, s := range resp.Secrets {
+		if s.Name == name && s.Path == path {
+			secret = s
+			break
+		}
+	}
+	if secret == nil {
+		sep := "/"
+		if path == "/" {
+			// Root path already supplies the separator — avoid `//<name>`.
+			sep = ""
+		}
+		return nil, &SecretNotFoundError{SecretName: fmt.Sprintf("scaleway://%s/%s%s%s%s", b.region, b.projectID, path, sep, name)}
+	}
+	access, err := b.client.AccessSecretVersion(&smapi.AccessSecretVersionRequest{
+		Region:   b.region,
+		SecretID: secret.ID,
+		Revision: "latest_enabled",
+	}, scw.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("scaleway access-secret-version failed: %w", err)
+	}
+	return access.Data, nil
 }
 
 // Create implements Backend. If a Secret with this name already exists
