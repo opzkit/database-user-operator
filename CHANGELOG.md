@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/opzkit/database-user-operator/compare/v0.4.0...v0.5.0) (2026-05-23)
+
+
+### Features
+
+* **scaleway:** connectionString.scaleway — read admin DSN from Scaleway SM ([#174](https://github.com/opzkit/database-user-operator/issues/174)) ([28c779a](https://github.com/opzkit/database-user-operator/commit/28c779af910fb24c921c2d747923bfa7c3b589bc))
+* **scaleway:** operator-env auth fallback for {connectionString,secretBackend}.scaleway ([#175](https://github.com/opzkit/database-user-operator/issues/175)) ([7ec3bcb](https://github.com/opzkit/database-user-operator/commit/7ec3bcb4e36290096748500d13112cd09b12aeef))
+
+
+### Bug Fixes
+
+* **scaleway:** canonicalize Secret.Path to drop trailing slash ([#172](https://github.com/opzkit/database-user-operator/issues/172)) ([dabf1c3](https://github.com/opzkit/database-user-operator/commit/dabf1c37b314a6868d15d20467090882dd2bd57e))
+
 ## [0.4.0](https://github.com/opzkit/database-user-operator/compare/v0.3.0...v0.4.0) (2026-05-22)
 
 
