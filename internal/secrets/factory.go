@@ -150,7 +150,7 @@ func readInfisicalAuth(ctx context.Context, k8sClient client.Client, namespace, 
 // other client constructions inside the pod without translation.
 const (
 	ScalewayEnvAccessKey = "SCW_ACCESS_KEY"
-	ScalewayEnvSecretKey = "SCW_SECRET_KEY"
+	ScalewayEnvSecretKey = "SCW_SECRET_KEY" //nolint:gosec // env var name, not a credential
 )
 
 // LoadScalewayAuth returns Scaleway IAM credentials sourced from one
@@ -167,6 +167,14 @@ const (
 // Returns a descriptive error if neither source yields a complete
 // (access_key, secret_key) pair. The k8s-Secret path requires
 // `k8sClient` to be non-nil; the env path does not.
+//
+// Security trade-off: the env path uses ONE operator-pod IAM key for
+// every Database CR cluster-wide. Per-namespace RBAC no longer scopes
+// which Scaleway Project a CR can touch — `spec.scaleway.projectID`
+// on any CR is reachable as long as the operator key has IAM on that
+// Project. Scope the operator key to the Project set all consuming
+// namespaces are allowed to touch, or stay on the per-CR
+// `authSecretRef` path when tenant isolation matters.
 func LoadScalewayAuth(ctx context.Context, k8sClient client.Client, namespace, secretName string) (ScalewayAuth, error) {
 	if secretName != "" {
 		if k8sClient == nil {

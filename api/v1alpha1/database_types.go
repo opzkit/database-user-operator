@@ -203,6 +203,12 @@ type ScalewaySecretBackend struct {
 	// (mirror of the AWS-backend IRSA / instance-profile pattern). One
 	// of the two — per-CR Secret or operator env — must be present at
 	// reconcile time.
+	//
+	// Security note: the env-fallback path uses one operator-pod IAM
+	// key for every Database CR cluster-wide. Per-namespace RBAC no
+	// longer scopes which Scaleway Project a CR can target via
+	// `projectID`. Scope the operator key narrowly (or stay on the
+	// per-CR Secret path) when tenant isolation matters.
 	// +optional
 	AuthSecretRef *KubernetesSecretRef `json:"authSecretRef,omitempty"`
 }
@@ -301,6 +307,12 @@ type ScalewayConnectionStringRef struct {
 	// (mirror of the AWS-backend IRSA / instance-profile pattern). One
 	// of the two — per-CR Secret or operator env — must be present at
 	// reconcile time.
+	//
+	// Security note: the env-fallback path uses one operator-pod IAM
+	// key for every Database CR cluster-wide. Per-namespace RBAC no
+	// longer scopes which Scaleway Project a CR can target via
+	// `projectID`. Scope the operator key narrowly (or stay on the
+	// per-CR Secret path) when tenant isolation matters.
 	// +optional
 	AuthSecretRef *KubernetesSecretRef `json:"authSecretRef,omitempty"`
 }

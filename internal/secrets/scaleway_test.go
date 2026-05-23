@@ -16,6 +16,8 @@ import (
 
 	smapi "github.com/scaleway/scaleway-sdk-go/api/secret/v1beta1"
 	"github.com/scaleway/scaleway-sdk-go/scw"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // fakeScalewayClient is an in-memory implementation of ScalewaySMClient
@@ -431,10 +433,57 @@ func TestScalewayBackend_GetRawAt(t *testing.T) {
 	}
 
 	// Miss path: nonexistent (path, name) must return SecretNotFoundError.
-	if _, err := b.GetRawAt(context.Background(), "/rdb/postgres", "does-not-exist"); err == nil {
-		t.Errorf("GetRawAt on missing secret: want SecretNotFoundError, got nil")
-	} else if _, ok := err.(*SecretNotFoundError); !ok {
+	_, err = b.GetRawAt(context.Background(), "/rdb/postgres", "does-not-exist")
+	var nf *SecretNotFoundError
+	if !errors.As(err, &nf) {
 		t.Errorf("GetRawAt on missing secret: want *SecretNotFoundError, got %T (%v)", err, err)
+	}
+
+	// Trailing-slash tolerance: a caller-supplied "/rdb/postgres/"
+	// must canonicalise to "/rdb/postgres" before the ListSecrets
+	// filter, otherwise the round-trip bug class fixed in #172
+	// resurfaces on the read side.
+	got, err = b.GetRawAt(context.Background(), "/rdb/postgres/", "intersolia-staging-pg")
+	if err != nil {
+		t.Fatalf("GetRawAt with trailing-slash path: %v", err)
+	}
+	if string(got) != string(payload) {
+		t.Errorf("GetRawAt trailing-slash payload mismatch:\ngot:  %s\nwant: %s", got, payload)
+	}
+}
+
+// Regression: on a second reconcile the existence check has to find
+// the Secret the operator wrote on the first reconcile, otherwise the
+// operator loops forever attempting CreateSecret and Scaleway returns
+// "name is wrongly formatted, cannot have same secret name in same
+// path". Pre-fix the path-and-name split produced "/rds/postgres/"
+// (trailing slash) for both the Create request and the subsequent
+// find filter; Scaleway normalised the stored Path to "/rds/postgres"
+// and the in-code `s.Path == path` comparison rejected the hit.
+// Originally added in #172; kept here so the round-trip stays
+// guarded independently of GetRawAt coverage.
+func TestScalewayBackend_FindAfterCreate(t *testing.T) {
+	fake := newFakeScalewayClient()
+	b := newScalewayTestBackend(fake)
+
+	if _, _, err := b.Create(context.Background(), "rds/postgres/chemcat", "", sampleDBSecret(), nil, ""); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	ok, err := b.Exists(context.Background(), "rds/postgres/chemcat")
+	if err != nil {
+		t.Fatalf("Exists: %v", err)
+	}
+	if !ok {
+		t.Fatalf("Exists after Create returned false — operator would loop on CreateSecret")
+	}
+
+	got, err := b.Get(context.Background(), "rds/postgres/chemcat")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.DBHost != "pg.example.com" {
+		t.Errorf("Get returned wrong payload: DBHost = %q", got.DBHost)
 	}
 }
 
@@ -537,6 +586,9 @@ func TestLoadScalewayAuth_EnvFallback(t *testing.T) {
 }
 
 func TestLoadScalewayAuth_MissingBoth(t *testing.T) {
+	// t.Setenv("", "") sets the env var to empty string rather than
+	// unsetting it; for os.Getenv the two states are indistinguishable
+	// (both yield ""), so the fallback path treats it as "unset".
 	t.Setenv(ScalewayEnvAccessKey, "")
 	t.Setenv(ScalewayEnvSecretKey, "")
 
@@ -546,5 +598,34 @@ func TestLoadScalewayAuth_MissingBoth(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), ScalewayEnvAccessKey) || !strings.Contains(err.Error(), ScalewayEnvSecretKey) {
 		t.Errorf("LoadScalewayAuth missing-both: error %q should mention both env var names", err)
+	}
+}
+
+func TestLoadScalewayAuth_SecretPath(t *testing.T) {
+	authSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "scaleway-creds", Namespace: "tenant-a"},
+		Data: map[string][]byte{
+			"access_key": []byte("SCWXSECRETACCESS"),
+			"secret_key": []byte("k8s-secret-uuid"),
+		},
+	}
+	c := newFakeClient(authSecret)
+
+	got, err := LoadScalewayAuth(context.Background(), c, "tenant-a", "scaleway-creds")
+	if err != nil {
+		t.Fatalf("LoadScalewayAuth secret path: %v", err)
+	}
+	if got.AccessKey != "SCWXSECRETACCESS" || got.SecretKey != "k8s-secret-uuid" {
+		t.Errorf("LoadScalewayAuth secret path: got %+v, want {AccessKey: SCWXSECRETACCESS, SecretKey: k8s-secret-uuid}", got)
+	}
+}
+
+func TestLoadScalewayAuth_SecretPathNilClient(t *testing.T) {
+	_, err := LoadScalewayAuth(context.Background(), nil, "tenant-a", "scaleway-creds")
+	if err == nil {
+		t.Fatalf("LoadScalewayAuth: want error when secretName is set but k8sClient is nil, got nil")
+	}
+	if !strings.Contains(err.Error(), "non-nil k8s client") {
+		t.Errorf("LoadScalewayAuth nil-client: error %q should mention non-nil k8s client", err)
 	}
 }
