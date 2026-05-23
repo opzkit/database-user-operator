@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -107,10 +108,11 @@ func NewBackend(ctx context.Context, db *databasev1alpha1.Database, k8sClient cl
 		), nil
 
 	case sb.Scaleway != nil:
-		if k8sClient == nil {
-			return nil, errors.New("scaleway secret backend requires a non-nil k8s client (to read the API-key Secret)")
+		var refName string
+		if sb.Scaleway.AuthSecretRef != nil {
+			refName = sb.Scaleway.AuthSecretRef.Name
 		}
-		auth, err := readScalewayAuth(ctx, k8sClient, db.Namespace, sb.Scaleway.AuthSecretRef.Name)
+		auth, err := LoadScalewayAuth(ctx, k8sClient, db.Namespace, refName)
 		if err != nil {
 			return nil, err
 		}
@@ -139,6 +141,53 @@ func readInfisicalAuth(ctx context.Context, k8sClient client.Client, namespace, 
 		return InfisicalAuth{}, fmt.Errorf("infisical auth secret %s/%s missing %q or %q key", namespace, name, InfisicalAuthClientIDKey, InfisicalAuthClientSecretKey)
 	}
 	return InfisicalAuth{ClientID: clientID, ClientSecret: clientSecret}, nil
+}
+
+// Operator-pod environment variables read by LoadScalewayAuth when
+// `spec.{secretBackend,connectionString}.scaleway.authSecretRef` is
+// omitted on the Database CR. Matches the variable names the Scaleway
+// SDK loader (`scw.WithEnv()`) expects, so the same env can also back
+// other client constructions inside the pod without translation.
+const (
+	ScalewayEnvAccessKey = "SCW_ACCESS_KEY"
+	ScalewayEnvSecretKey = "SCW_SECRET_KEY" //nolint:gosec // env var name, not a credential
+)
+
+// LoadScalewayAuth returns Scaleway IAM credentials sourced from one
+// of two places:
+//
+//  1. If `secretName` is non-empty, read access_key + secret_key from
+//     a Kubernetes Secret named `secretName` in `namespace` (the
+//     Database's namespace).
+//  2. Otherwise fall back to the operator pod's `SCW_ACCESS_KEY` +
+//     `SCW_SECRET_KEY` environment variables — mirrors the AWS-backend
+//     IRSA / instance-profile pattern, removing the need for a
+//     per-namespace credential Secret.
+//
+// Returns a descriptive error if neither source yields a complete
+// (access_key, secret_key) pair. The k8s-Secret path requires
+// `k8sClient` to be non-nil; the env path does not.
+//
+// Security trade-off: the env path uses ONE operator-pod IAM key for
+// every Database CR cluster-wide. Per-namespace RBAC no longer scopes
+// which Scaleway Project a CR can touch — `spec.scaleway.projectID`
+// on any CR is reachable as long as the operator key has IAM on that
+// Project. Scope the operator key to the Project set all consuming
+// namespaces are allowed to touch, or stay on the per-CR
+// `authSecretRef` path when tenant isolation matters.
+func LoadScalewayAuth(ctx context.Context, k8sClient client.Client, namespace, secretName string) (ScalewayAuth, error) {
+	if secretName != "" {
+		if k8sClient == nil {
+			return ScalewayAuth{}, errors.New("scaleway auth requires a non-nil k8s client to read authSecretRef")
+		}
+		return readScalewayAuth(ctx, k8sClient, namespace, secretName)
+	}
+	accessKey := os.Getenv(ScalewayEnvAccessKey)
+	secretKey := os.Getenv(ScalewayEnvSecretKey)
+	if accessKey == "" || secretKey == "" {
+		return ScalewayAuth{}, fmt.Errorf("scaleway auth: spec.{secretBackend,connectionString}.scaleway.authSecretRef is omitted and operator env vars %s + %s are not both set", ScalewayEnvAccessKey, ScalewayEnvSecretKey)
+	}
+	return ScalewayAuth{AccessKey: accessKey, SecretKey: secretKey}, nil
 }
 
 // readScalewayAuth reads the access_key/secret_key pair from the

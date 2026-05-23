@@ -277,7 +277,7 @@ func TestValidateConnectionSource(t *testing.T) {
 							ProjectID: "00000000-0000-0000-0000-000000000000",
 							Path:      "/rdb/postgres",
 							Name:      "intersolia-staging-pg",
-							AuthSecretRef: databasev1alpha1.KubernetesSecretRef{
+							AuthSecretRef: &databasev1alpha1.KubernetesSecretRef{
 								Name: "scaleway-creds",
 							},
 						},
@@ -317,7 +317,7 @@ func TestValidateConnectionSource(t *testing.T) {
 							Region:    "fr-par",
 							ProjectID: "00000000-0000-0000-0000-000000000000",
 							Name:      "intersolia-staging-pg",
-							AuthSecretRef: databasev1alpha1.KubernetesSecretRef{
+							AuthSecretRef: &databasev1alpha1.KubernetesSecretRef{
 								Name: "scaleway-creds",
 							},
 						},

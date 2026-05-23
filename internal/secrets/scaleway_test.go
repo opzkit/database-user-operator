@@ -16,6 +16,8 @@ import (
 
 	smapi "github.com/scaleway/scaleway-sdk-go/api/secret/v1beta1"
 	"github.com/scaleway/scaleway-sdk-go/scw"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // fakeScalewayClient is an in-memory implementation of ScalewaySMClient
@@ -567,5 +569,63 @@ func TestScalewayBackend_StoredPayloadIsDatabaseSecretJSON(t *testing.T) {
 				t.Errorf("stored payload missing key %q: %v", k, m)
 			}
 		}
+	}
+}
+
+func TestLoadScalewayAuth_EnvFallback(t *testing.T) {
+	t.Setenv(ScalewayEnvAccessKey, "SCWXENVACCESS")
+	t.Setenv(ScalewayEnvSecretKey, "envsecret-uuid")
+
+	got, err := LoadScalewayAuth(context.Background(), nil, "any-ns", "")
+	if err != nil {
+		t.Fatalf("LoadScalewayAuth env path: %v", err)
+	}
+	if got.AccessKey != "SCWXENVACCESS" || got.SecretKey != "envsecret-uuid" {
+		t.Errorf("LoadScalewayAuth env path: got %+v, want {AccessKey: SCWXENVACCESS, SecretKey: envsecret-uuid}", got)
+	}
+}
+
+func TestLoadScalewayAuth_MissingBoth(t *testing.T) {
+	// t.Setenv("", "") sets the env var to empty string rather than
+	// unsetting it; for os.Getenv the two states are indistinguishable
+	// (both yield ""), so the fallback path treats it as "unset".
+	t.Setenv(ScalewayEnvAccessKey, "")
+	t.Setenv(ScalewayEnvSecretKey, "")
+
+	_, err := LoadScalewayAuth(context.Background(), nil, "any-ns", "")
+	if err == nil {
+		t.Fatalf("LoadScalewayAuth: want error when authSecretRef omitted and env vars unset, got nil")
+	}
+	if !strings.Contains(err.Error(), ScalewayEnvAccessKey) || !strings.Contains(err.Error(), ScalewayEnvSecretKey) {
+		t.Errorf("LoadScalewayAuth missing-both: error %q should mention both env var names", err)
+	}
+}
+
+func TestLoadScalewayAuth_SecretPath(t *testing.T) {
+	authSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "scaleway-creds", Namespace: "tenant-a"},
+		Data: map[string][]byte{
+			"access_key": []byte("SCWXSECRETACCESS"),
+			"secret_key": []byte("k8s-secret-uuid"),
+		},
+	}
+	c := newFakeClient(authSecret)
+
+	got, err := LoadScalewayAuth(context.Background(), c, "tenant-a", "scaleway-creds")
+	if err != nil {
+		t.Fatalf("LoadScalewayAuth secret path: %v", err)
+	}
+	if got.AccessKey != "SCWXSECRETACCESS" || got.SecretKey != "k8s-secret-uuid" {
+		t.Errorf("LoadScalewayAuth secret path: got %+v, want {AccessKey: SCWXSECRETACCESS, SecretKey: k8s-secret-uuid}", got)
+	}
+}
+
+func TestLoadScalewayAuth_SecretPathNilClient(t *testing.T) {
+	_, err := LoadScalewayAuth(context.Background(), nil, "tenant-a", "scaleway-creds")
+	if err == nil {
+		t.Fatalf("LoadScalewayAuth: want error when secretName is set but k8sClient is nil, got nil")
+	}
+	if !strings.Contains(err.Error(), "non-nil k8s client") {
+		t.Errorf("LoadScalewayAuth nil-client: error %q should mention non-nil k8s client", err)
 	}
 }

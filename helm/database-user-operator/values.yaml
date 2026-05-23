@@ -78,6 +78,27 @@ podLabels: {}
 nodeSelector: {}
 tolerations: []
 affinity: {}
+# Extra env vars injected on the controller-manager container.
+#
+# Set SCW_ACCESS_KEY + SCW_SECRET_KEY here (typically via valueFrom +
+# Secret ref) to enable the cluster-wide Scaleway IAM auth path for
+# secretBackend.scaleway / connectionString.scaleway. When set, those
+# CR fields can omit `authSecretRef` and the controller falls back to
+# the pod env — mirror of the AWS backend's IRSA / instance-profile
+# pattern, removes the per-namespace credential Secret.
+#
+# Example:
+#   env:
+#     - name: SCW_ACCESS_KEY
+#       valueFrom:
+#         secretKeyRef:
+#           name: dbuo-scaleway-creds
+#           key: access_key
+#     - name: SCW_SECRET_KEY
+#       valueFrom:
+#         secretKeyRef:
+#           name: dbuo-scaleway-creds
+#           key: secret_key
 env: []
 extraVolumes: []
 extraVolumeMounts: []

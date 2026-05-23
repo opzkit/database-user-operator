@@ -197,8 +197,20 @@ type ScalewaySecretBackend struct {
 	// as the Database holding `access_key` and `secret_key` data keys
 	// for the Scaleway IAM API key. Same shape as the Secret consumed by
 	// the Scaleway provider in External Secrets Operator.
-	// +kubebuilder:validation:Required
-	AuthSecretRef KubernetesSecretRef `json:"authSecretRef"`
+	//
+	// Optional: when omitted, the controller falls back to the operator
+	// pod's `SCW_ACCESS_KEY` + `SCW_SECRET_KEY` environment variables
+	// (mirror of the AWS-backend IRSA / instance-profile pattern). One
+	// of the two — per-CR Secret or operator env — must be present at
+	// reconcile time.
+	//
+	// Security note: the env-fallback path uses one operator-pod IAM
+	// key for every Database CR cluster-wide. Per-namespace RBAC no
+	// longer scopes which Scaleway Project a CR can target via
+	// `projectID`. Scope the operator key narrowly (or stay on the
+	// per-CR Secret path) when tenant isolation matters.
+	// +optional
+	AuthSecretRef *KubernetesSecretRef `json:"authSecretRef,omitempty"`
 }
 
 // ConnectionStringSource selects where the admin DSN is read from.
@@ -289,8 +301,20 @@ type ScalewayConnectionStringRef struct {
 	// data keys for the Scaleway IAM API key. Same shape as
 	// `secretBackend.scaleway.authSecretRef` so a single Secret can
 	// back both the admin-DSN read and the per-DB credential write.
-	// +kubebuilder:validation:Required
-	AuthSecretRef KubernetesSecretRef `json:"authSecretRef"`
+	//
+	// Optional: when omitted, the controller falls back to the operator
+	// pod's `SCW_ACCESS_KEY` + `SCW_SECRET_KEY` environment variables
+	// (mirror of the AWS-backend IRSA / instance-profile pattern). One
+	// of the two — per-CR Secret or operator env — must be present at
+	// reconcile time.
+	//
+	// Security note: the env-fallback path uses one operator-pod IAM
+	// key for every Database CR cluster-wide. Per-namespace RBAC no
+	// longer scopes which Scaleway Project a CR can target via
+	// `projectID`. Scope the operator key narrowly (or stay on the
+	// per-CR Secret path) when tenant isolation matters.
+	// +optional
+	AuthSecretRef *KubernetesSecretRef `json:"authSecretRef,omitempty"`
 }
 
 // KubernetesSecretRef is a generic reference to a Kubernetes Secret in
