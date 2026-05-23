@@ -8,7 +8,6 @@ See LICENSE file in the project root for full license information.
 package controller
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -984,22 +983,25 @@ func (r *DatabaseReconciler) getConnectionStringFromScalewaySecret(ctx context.C
 	logger := log.FromContext(ctx)
 	swRef := db.Spec.ConnectionString.Scaleway
 
-	// Read the IAM auth Secret from the same namespace as the Database.
-	authSecret := &corev1.Secret{}
-	if err := r.Get(ctx, client.ObjectKey{Name: swRef.AuthSecretRef.Name, Namespace: db.Namespace}, authSecret); err != nil {
-		return "", fmt.Errorf("failed to read scaleway auth Secret %s/%s: %w", db.Namespace, swRef.AuthSecretRef.Name, err)
+	// Load Scaleway IAM creds — same-namespace k8s Secret when
+	// authSecretRef is set, operator-pod env vars otherwise. Mirror
+	// of the AWS-backend IRSA path so a cluster-wide Scaleway IAM
+	// key on the operator pod removes the per-namespace Secret.
+	var refName string
+	if swRef.AuthSecretRef != nil {
+		refName = swRef.AuthSecretRef.Name
 	}
-	accessKey := string(authSecret.Data["access_key"])
-	secretKey := string(authSecret.Data["secret_key"])
-	if accessKey == "" || secretKey == "" {
-		return "", fmt.Errorf("scaleway auth Secret %s/%s missing access_key or secret_key data", db.Namespace, swRef.AuthSecretRef.Name)
+	auth, err := secrets.LoadScalewayAuth(ctx, r.Client, db.Namespace, refName)
+	if err != nil {
+		return "", err
 	}
 
 	logger.Info("Creating Scaleway Secret Manager client for admin credentials",
 		"database", db.Spec.DatabaseName,
 		"region", swRef.Region,
-		"projectID", swRef.ProjectID)
-	backend, err := secrets.NewScalewayBackend(swRef.Region, swRef.ProjectID, secrets.ScalewayAuth{AccessKey: accessKey, SecretKey: secretKey})
+		"projectID", swRef.ProjectID,
+		"authSource", scalewayAuthSourceLabel(swRef.AuthSecretRef))
+	backend, err := secrets.NewScalewayBackend(swRef.Region, swRef.ProjectID, auth)
 	if err != nil {
 		return "", fmt.Errorf("failed to construct scaleway client for admin connection string: %w", err)
 	}
@@ -1023,11 +1025,8 @@ func (r *DatabaseReconciler) getConnectionStringFromScalewaySecret(ctx context.C
 	// If the payload looks like a JSON object, extract the configured
 	// key. Mirrors the AWS branch behaviour: callers can either store
 	// a single-string secret (raw DSN) or a JSON object with a named
-	// `connectionString` (or user-chosen) property. Sniff by the first
-	// non-whitespace byte rather than `Contains("{")` — a raw DSN can
-	// legitimately embed `{` (e.g. inside a password), and a substring
-	// match would route it down the JSON branch and fail unmarshal.
-	if bytes.HasPrefix(bytes.TrimSpace(payload), []byte("{")) {
+	// `connectionString` (or user-chosen) property.
+	if strings.Contains(value, "{") {
 		var data map[string]interface{}
 		if err := json.Unmarshal(payload, &data); err != nil {
 			return "", fmt.Errorf("failed to parse Scaleway secret payload as JSON: %w", err)
@@ -1072,6 +1071,16 @@ func validateConnectionSource(db *databasev1alpha1.Database) error {
 		return fmt.Errorf("no connectionString source specified (set one of: aws, kubernetes, scaleway)")
 	}
 	return nil
+}
+
+// scalewayAuthSourceLabel returns a human-readable hint for log
+// fields about where Scaleway IAM creds came from (per-CR k8s
+// Secret name, or "env" for the operator-pod env-var fallback).
+func scalewayAuthSourceLabel(ref *databasev1alpha1.KubernetesSecretRef) string {
+	if ref != nil && ref.Name != "" {
+		return "secret/" + ref.Name
+	}
+	return "env"
 }
 
 // connectionStringKeyDefault returns the secret key (or "connectionString" by default).
