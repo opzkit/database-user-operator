@@ -1126,17 +1126,22 @@ func needsReconciliation(db *databasev1alpha1.Database) bool {
 }
 
 // getSecretNameOrDefault returns the secret name from the spec, or generates a backend-aware default.
-// AWS / Infisical: rds/<engine>/<databaseName> (path-shaped names allowed).
+// AWS / Infisical: rds/<engine>/<databaseName> (path-shaped names allowed; AWS RDS is the service name).
+// Scaleway: rdb/<engine>/<databaseName> (path-shaped names allowed; Scaleway RDB is the service name).
 // Kubernetes: rds-<engine>-<databaseName> (DNS-1123 — '/' is rejected by Secret name validation).
 func getSecretNameOrDefault(db *databasev1alpha1.Database) string {
 	if db.Spec.SecretName != "" {
 		return db.Spec.SecretName
 	}
+	prefix := "rds"
 	sep := "/"
-	if db.Spec.SecretBackend.Kubernetes != nil {
+	switch {
+	case db.Spec.SecretBackend.Scaleway != nil:
+		prefix = "rdb"
+	case db.Spec.SecretBackend.Kubernetes != nil:
 		sep = "-"
 	}
-	return fmt.Sprintf("rds%s%s%s%s", sep, db.Spec.Engine, sep, db.Spec.DatabaseName)
+	return fmt.Sprintf("%s%s%s%s%s", prefix, sep, db.Spec.Engine, sep, db.Spec.DatabaseName)
 }
 
 // getRegion determines the AWS region from the Database spec.

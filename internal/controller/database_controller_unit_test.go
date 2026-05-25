@@ -547,6 +547,35 @@ func TestGetSecretNameOrDefault(t *testing.T) {
 			},
 			want: "rds/postgres/testdb",
 		},
+		{
+			name: "Scaleway backend - uses rdb/<engine>/<database> (Scaleway's service name)",
+			db: &databasev1alpha1.Database{
+				Spec: databasev1alpha1.DatabaseSpec{
+					Engine:       databasev1alpha1.DatabaseEnginePostgres,
+					DatabaseName: "billing",
+					SecretBackend: databasev1alpha1.SecretBackend{
+						Scaleway: &databasev1alpha1.ScalewaySecretBackend{
+							Region:    "fr-par",
+							ProjectID: "00000000-0000-0000-0000-000000000000",
+						},
+					},
+				},
+			},
+			want: "rdb/postgres/billing",
+		},
+		{
+			name: "Kubernetes backend - DNS-1123 safe rds-<engine>-<database>",
+			db: &databasev1alpha1.Database{
+				Spec: databasev1alpha1.DatabaseSpec{
+					Engine:       databasev1alpha1.DatabaseEnginePostgres,
+					DatabaseName: "loyalty",
+					SecretBackend: databasev1alpha1.SecretBackend{
+						Kubernetes: &databasev1alpha1.KubernetesSecretBackend{},
+					},
+				},
+			},
+			want: "rds-postgres-loyalty",
+		},
 	}
 
 	for _, tt := range tests {
