@@ -1126,19 +1126,27 @@ func needsReconciliation(db *databasev1alpha1.Database) bool {
 }
 
 // getSecretNameOrDefault returns the secret name from the spec, or generates a backend-aware default.
-// AWS / Infisical: rds/<engine>/<databaseName> (path-shaped names allowed; AWS RDS is the service name).
-// Scaleway: rdb/<engine>/<databaseName> (path-shaped names allowed; Scaleway RDB is the service name).
-// Kubernetes: rds-<engine>-<databaseName> (DNS-1123 — '/' is rejected by Secret name validation).
+// AWS:        rds/<engine>/<databaseName> (path-shaped; AWS RDS is the service name).
+// Scaleway:   rdb/<engine>/<databaseName> (path-shaped; Scaleway RDB is the service name).
+// Infisical:  db/<engine>/<databaseName>  (path-shaped; backend-neutral, hosted secret store).
+// Kubernetes: db-<engine>-<databaseName>  (DNS-1123 — '/' is rejected by Secret name validation).
 func getSecretNameOrDefault(db *databasev1alpha1.Database) string {
 	if db.Spec.SecretName != "" {
 		return db.Spec.SecretName
 	}
+	// Default prefix uses the cloud's own service name for AWS+Scaleway
+	// (matches what Terraform / Cloud Console operators already write
+	// for shared admin DSNs in the same namespace) and a neutral `db`
+	// for non-cloud backends.
 	prefix := "rds"
 	sep := "/"
 	switch {
 	case db.Spec.SecretBackend.Scaleway != nil:
 		prefix = "rdb"
+	case db.Spec.SecretBackend.Infisical != nil:
+		prefix = "db"
 	case db.Spec.SecretBackend.Kubernetes != nil:
+		prefix = "db"
 		sep = "-"
 	}
 	return fmt.Sprintf("%s%s%s%s%s", prefix, sep, db.Spec.Engine, sep, db.Spec.DatabaseName)

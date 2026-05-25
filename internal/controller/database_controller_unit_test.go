@@ -564,7 +564,20 @@ func TestGetSecretNameOrDefault(t *testing.T) {
 			want: "rdb/postgres/billing",
 		},
 		{
-			name: "Kubernetes backend - DNS-1123 safe rds-<engine>-<database>",
+			name: "Infisical backend - backend-neutral db/<engine>/<database>",
+			db: &databasev1alpha1.Database{
+				Spec: databasev1alpha1.DatabaseSpec{
+					Engine:       databasev1alpha1.DatabaseEnginePostgres,
+					DatabaseName: "fulfillment",
+					SecretBackend: databasev1alpha1.SecretBackend{
+						Infisical: &databasev1alpha1.InfisicalSecretBackend{},
+					},
+				},
+			},
+			want: "db/postgres/fulfillment",
+		},
+		{
+			name: "Kubernetes backend - DNS-1123 safe db-<engine>-<database>",
 			db: &databasev1alpha1.Database{
 				Spec: databasev1alpha1.DatabaseSpec{
 					Engine:       databasev1alpha1.DatabaseEnginePostgres,
@@ -574,7 +587,7 @@ func TestGetSecretNameOrDefault(t *testing.T) {
 					},
 				},
 			},
-			want: "rds-postgres-loyalty",
+			want: "db-postgres-loyalty",
 		},
 	}
 

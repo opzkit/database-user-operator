@@ -63,10 +63,10 @@ matches the chosen backend's native service name:
 
 | Backend     | Default `secretName`                  |
 | ----------- | ------------------------------------- |
-| AWS         | `rds/<engine>/<databaseName>`         |
-| Scaleway    | `rdb/<engine>/<databaseName>`         |
-| Infisical   | `rds/<engine>/<databaseName>`         |
-| Kubernetes  | `rds-<engine>-<databaseName>` (DNS-1123) |
+| AWS         | `rds/<engine>/<databaseName>` (AWS service name) |
+| Scaleway    | `rdb/<engine>/<databaseName>` (Scaleway service name) |
+| Infisical   | `db/<engine>/<databaseName>` (backend-neutral) |
+| Kubernetes  | `db-<engine>-<databaseName>` (backend-neutral; DNS-1123) |
 
 ### connectionString.kubernetes
 
