@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/opzkit/database-user-operator/compare/v0.5.0...v0.6.0) (2026-05-25)
+
+
+### Features
+
+* default Scaleway secret name to rdb/&lt;engine&gt;/&lt;databaseName&gt; ([#178](https://github.com/opzkit/database-user-operator/issues/178)) ([de5f48a](https://github.com/opzkit/database-user-operator/commit/de5f48acaf14328ee041c645a088235b1584fa58))
+
 ## [0.5.0](https://github.com/opzkit/database-user-operator/compare/v0.4.0...v0.5.0) (2026-05-23)
 
 
