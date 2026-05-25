@@ -53,10 +53,20 @@ This creates:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `username` | string | `databaseName` | Username for created user |
-| `secretName` | string | `rds/<engine>/<databaseName>` | AWS secret path |
+| `secretName` | string | backend-specific (see below) | Secret name in the chosen backend |
 | `privileges` | []string | `["ALL"]` | Privileges to grant |
 | `retainOnDelete` | bool | `true` | Retain resources on CR deletion |
 | `secretBackend.aws` | object | - | AWS Secrets Manager config |
+
+When `secretName` is omitted the operator generates a default that
+matches the chosen backend's native service name:
+
+| Backend     | Default `secretName`                  |
+| ----------- | ------------------------------------- |
+| AWS         | `rds/<engine>/<databaseName>` (AWS service name) |
+| Scaleway    | `rdb/<engine>/<databaseName>` (Scaleway service name) |
+| Infisical   | `db/<engine>/<databaseName>` (backend-neutral) |
+| Kubernetes  | `db-<engine>-<databaseName>` (backend-neutral; DNS-1123) |
 
 ### connectionString.kubernetes
 
