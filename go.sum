@@ -155,6 +155,8 @@ github.com/hashicorp/golang-lru/v2 v2.0.7 h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs
 github.com/hashicorp/golang-lru/v2 v2.0.7/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
 github.com/infisical/go-sdk v0.7.1 h1:26upmNiIuXJgZEQdH8ThLZ18EIGdg9ifMm+fBGXSmP0=
 github.com/infisical/go-sdk v0.7.1/go.mod h1:yEfXF+3YDDXiJ9zzJUSzW6me6XXPPEDK52fSU6JfpCA=
+github.com/infisical/go-sdk v0.7.2 h1:iw7uVzH8TTv7kN/xbc2HqmeflmPfRDhVVOk82fI1LeI=
+github.com/infisical/go-sdk v0.7.2/go.mod h1:yEfXF+3YDDXiJ9zzJUSzW6me6XXPPEDK52fSU6JfpCA=
 github.com/joshdk/go-junit v1.0.0 h1:S86cUKIdwBHWwA6xCmFlf3RTLfVXYQfvanM5Uh+K6GE=
 github.com/joshdk/go-junit v1.0.0/go.mod h1:TiiV0PqkaNfFXjEiyjWM3XXrhVyCa1K4Zfga6W52ung=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
