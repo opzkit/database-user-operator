@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: ghcr.io/opzkit/database-user-operator
   pullPolicy: IfNotPresent
-  tag: 0.6.0
+  tag: 0.7.0
 imagePullSecrets: []
 nameOverride: ''
 fullnameOverride: ''
@@ -78,20 +78,6 @@ podLabels: {}
 nodeSelector: {}
 tolerations: []
 affinity: {}
-# Extra environment variables for the operator pod.
-#
-# Scaleway operator-level defaults: when a Database CR omits
-# spec.{secretBackend,connectionString}.scaleway.projectID / .region,
-# the operator falls back to SCW_DEFAULT_PROJECT_ID / SCW_DEFAULT_REGION
-# set here. This scopes every CR to the one Project/region the operator
-# runs against (per-CR overrides still win). Pair with SCW_ACCESS_KEY /
-# SCW_SECRET_KEY for the operator-wide IAM key fallback.
-#
-#   env:
-#     - name: SCW_DEFAULT_PROJECT_ID
-#       value: "5a339eb9-920f-4256-bbf2-d9ae6e0fb676"
-#     - name: SCW_DEFAULT_REGION
-#       value: "fr-par"
 env: []
 extraVolumes: []
 extraVolumeMounts: []

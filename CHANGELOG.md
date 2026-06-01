@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0](https://github.com/opzkit/database-user-operator/compare/v0.6.0...v0.7.0) (2026-06-01)
+
+
+### Features
+
+* **scaleway:** auto-detect operator default projectID and region from instance metadata ([#189](https://github.com/opzkit/database-user-operator/issues/189)) ([5024b59](https://github.com/opzkit/database-user-operator/commit/5024b59281ed53c29ab4f2070088d807fc555243))
+* **scaleway:** operator-level default projectID and region ([#188](https://github.com/opzkit/database-user-operator/issues/188)) ([975c8bf](https://github.com/opzkit/database-user-operator/commit/975c8bfda210571e027f1a1281f1cf015be63f16))
+
+
+### Bug Fixes
+
+* **deps:** update aws-sdk-go-v2 monorepo ([#186](https://github.com/opzkit/database-user-operator/issues/186)) ([8701834](https://github.com/opzkit/database-user-operator/commit/8701834a024c9b8ffab535907b8f0a0c40e58d61))
+* **deps:** update aws-sdk-go-v2 monorepo ([#190](https://github.com/opzkit/database-user-operator/issues/190)) ([f0d81d0](https://github.com/opzkit/database-user-operator/commit/f0d81d0526ca812479a66dae1b29659a0b7fc01a))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.32.18 ([#182](https://github.com/opzkit/database-user-operator/issues/182)) ([8fa0876](https://github.com/opzkit/database-user-operator/commit/8fa08763d37ed5840937b846b4418261ca745106))
+* **deps:** update module github.com/infisical/go-sdk to v0.7.2 ([#185](https://github.com/opzkit/database-user-operator/issues/185)) ([5fef7a5](https://github.com/opzkit/database-user-operator/commit/5fef7a5a4763d862a84255b1f1d05301e60eef59))
+
 ## [0.6.0](https://github.com/opzkit/database-user-operator/compare/v0.5.0...v0.6.0) (2026-05-25)
 
 
