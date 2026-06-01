@@ -174,13 +174,23 @@ type InfisicalSecretBackend struct {
 // reconcile).
 type ScalewaySecretBackend struct {
 	// Region is the Scaleway region for Secret Manager (e.g. fr-par, nl-ams, pl-waw).
-	// +kubebuilder:validation:Required
+	//
+	// Optional: when omitted, the controller falls back to the operator
+	// pod's SCW_DEFAULT_REGION environment variable. One of the two — this
+	// field or the operator env — must resolve at reconcile time.
+	// +optional
 	// +kubebuilder:validation:Enum=fr-par;nl-ams;pl-waw
-	Region string `json:"region"`
+	Region string `json:"region,omitempty"`
 
 	// ProjectID is the Scaleway Project UUID owning the secret.
-	// +kubebuilder:validation:Required
-	ProjectID string `json:"projectID"`
+	//
+	// Optional: when omitted, the controller falls back to the operator
+	// pod's SCW_DEFAULT_PROJECT_ID environment variable. One of the two —
+	// this field or the operator env — must resolve at reconcile time.
+	// Setting only the operator default scopes every Database CR to the
+	// single Project the operator runs against.
+	// +optional
+	ProjectID string `json:"projectID,omitempty"`
 
 	// Description is the description applied to the Scaleway secret on
 	// create/update.
@@ -270,13 +280,21 @@ type KubernetesConnectionStringRef struct {
 // payload isn't JSON.
 type ScalewayConnectionStringRef struct {
 	// Region is the Scaleway region for Secret Manager.
-	// +kubebuilder:validation:Required
+	//
+	// Optional: when omitted, the controller falls back to the operator
+	// pod's SCW_DEFAULT_REGION environment variable. One of the two — this
+	// field or the operator env — must resolve at reconcile time.
+	// +optional
 	// +kubebuilder:validation:Enum=fr-par;nl-ams;pl-waw
-	Region string `json:"region"`
+	Region string `json:"region,omitempty"`
 
 	// ProjectID is the Scaleway Project UUID owning the secret.
-	// +kubebuilder:validation:Required
-	ProjectID string `json:"projectID"`
+	//
+	// Optional: when omitted, the controller falls back to the operator
+	// pod's SCW_DEFAULT_PROJECT_ID environment variable. One of the two —
+	// this field or the operator env — must resolve at reconcile time.
+	// +optional
+	ProjectID string `json:"projectID,omitempty"`
 
 	// Path is the Scaleway Secret Path (folder). Defaults to "/" if
 	// omitted. Match the leading-slash form Scaleway stores it as.

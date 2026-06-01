@@ -997,12 +997,21 @@ func (r *DatabaseReconciler) getConnectionStringFromScalewaySecret(ctx context.C
 		return "", err
 	}
 
+	region, err := secrets.ResolveScalewayRegion(swRef.Region)
+	if err != nil {
+		return "", err
+	}
+	projectID, err := secrets.ResolveScalewayProjectID(swRef.ProjectID)
+	if err != nil {
+		return "", err
+	}
+
 	logger.Info("Creating Scaleway Secret Manager client for admin credentials",
 		"database", db.Spec.DatabaseName,
-		"region", swRef.Region,
-		"projectID", swRef.ProjectID,
+		"region", region,
+		"projectID", projectID,
 		"authSource", scalewayAuthSourceLabel(swRef.AuthSecretRef))
-	backend, err := secrets.NewScalewayBackend(swRef.Region, swRef.ProjectID, auth)
+	backend, err := secrets.NewScalewayBackend(region, projectID, auth)
 	if err != nil {
 		return "", fmt.Errorf("failed to construct scaleway client for admin connection string: %w", err)
 	}

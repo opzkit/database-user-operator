@@ -108,6 +108,14 @@ func NewBackend(ctx context.Context, db *databasev1alpha1.Database, k8sClient cl
 		), nil
 
 	case sb.Scaleway != nil:
+		region, err := ResolveScalewayRegion(sb.Scaleway.Region)
+		if err != nil {
+			return nil, err
+		}
+		projectID, err := ResolveScalewayProjectID(sb.Scaleway.ProjectID)
+		if err != nil {
+			return nil, err
+		}
 		var refName string
 		if sb.Scaleway.AuthSecretRef != nil {
 			refName = sb.Scaleway.AuthSecretRef.Name
@@ -116,11 +124,7 @@ func NewBackend(ctx context.Context, db *databasev1alpha1.Database, k8sClient cl
 		if err != nil {
 			return nil, err
 		}
-		return NewScalewayBackend(
-			sb.Scaleway.Region,
-			sb.Scaleway.ProjectID,
-			auth,
-		)
+		return NewScalewayBackend(region, projectID, auth)
 
 	default:
 		return nil, ErrNoBackendConfigured
@@ -152,6 +156,50 @@ const (
 	ScalewayEnvAccessKey = "SCW_ACCESS_KEY"
 	ScalewayEnvSecretKey = "SCW_SECRET_KEY" //nolint:gosec // env var name, not a credential
 )
+
+// Operator-pod environment variables supplying the default Scaleway
+// Project UUID and region when a Database CR omits
+// `spec.{secretBackend,connectionString}.scaleway.{projectID,region}`.
+// Matches the variable names the Scaleway SDK loader (`scw.WithEnv()`)
+// reads, mirroring the SCW_ACCESS_KEY / SCW_SECRET_KEY convention.
+//
+// Setting these scopes every Database CR to the single Project/region
+// the operator runs against: per-CR overrides remain possible, but a CR
+// that supplies neither field nor a different value cannot target
+// another Project. This is the intended trade-off — one operator, one
+// home Project.
+const (
+	ScalewayEnvDefaultProjectID = "SCW_DEFAULT_PROJECT_ID"
+	ScalewayEnvDefaultRegion    = "SCW_DEFAULT_REGION"
+)
+
+// ResolveScalewayProjectID returns the effective Scaleway Project UUID:
+// the CR-supplied value when set, otherwise the operator pod's
+// SCW_DEFAULT_PROJECT_ID. Returns an error when neither resolves.
+func ResolveScalewayProjectID(specProjectID string) (string, error) {
+	if specProjectID != "" {
+		return specProjectID, nil
+	}
+	if env := os.Getenv(ScalewayEnvDefaultProjectID); env != "" {
+		return env, nil
+	}
+	return "", fmt.Errorf("scaleway projectID unresolved: set spec.{secretBackend,connectionString}.scaleway.projectID on the Database or operator env %s", ScalewayEnvDefaultProjectID)
+}
+
+// ResolveScalewayRegion returns the effective Scaleway region: the
+// CR-supplied value when set, otherwise the operator pod's
+// SCW_DEFAULT_REGION. Returns an error when neither resolves. The
+// returned value is validated against the supported region set when the
+// backend client is constructed (NewScalewayBackend).
+func ResolveScalewayRegion(specRegion string) (string, error) {
+	if specRegion != "" {
+		return specRegion, nil
+	}
+	if env := os.Getenv(ScalewayEnvDefaultRegion); env != "" {
+		return env, nil
+	}
+	return "", fmt.Errorf("scaleway region unresolved: set spec.{secretBackend,connectionString}.scaleway.region on the Database or operator env %s", ScalewayEnvDefaultRegion)
+}
 
 // LoadScalewayAuth returns Scaleway IAM credentials sourced from one
 // of two places:
