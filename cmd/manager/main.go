@@ -17,6 +17,7 @@ import (
 
 	databasev1alpha1 "opzkit/database-user-operator/api/v1alpha1"
 	"opzkit/database-user-operator/internal/controller"
+	"opzkit/database-user-operator/internal/secrets"
 )
 
 var (
@@ -53,6 +54,11 @@ func main() {
 		"version", version,
 		"gitCommit", gitCommit,
 		"buildDate", buildDate)
+
+	// Auto-detect Scaleway operator defaults from instance metadata when
+	// SCW_DEFAULT_PROJECT_ID / SCW_DEFAULT_REGION aren't explicitly set.
+	// Best-effort and non-fatal: a no-op off Scaleway.
+	secrets.ApplyScalewayMetadataDefaults(context.Background(), setupLog)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
