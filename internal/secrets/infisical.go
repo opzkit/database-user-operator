@@ -100,7 +100,7 @@ func NewInfisicalBackend(siteURL, projectID, environment, secretsPath string, au
 
 	sdk := infisical.NewInfisicalClient(context.Background(), infisical.Config{
 		SiteUrl:          siteURL,
-		AutoTokenRefresh: true,
+		AutoTokenRefresh: infisical.BoolPtr(true),
 	})
 
 	return &InfisicalBackend{
