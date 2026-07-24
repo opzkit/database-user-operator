@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.42.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.30
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.43.1
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/infisical/go-sdk v0.8.0
 	github.com/lib/pq v1.12.3
