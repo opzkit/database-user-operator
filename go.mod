@@ -15,7 +15,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
 	github.com/prometheus/client_golang v1.24.1
-	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.36
+	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.37
 	k8s.io/api v0.36.3
 	k8s.io/apimachinery v0.36.3
 	k8s.io/client-go v0.36.3
