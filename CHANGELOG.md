@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.7.1](https://github.com/opzkit/database-user-operator/compare/v0.7.0...v0.7.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **deps:** update aws-sdk-go-v2 monorepo ([#198](https://github.com/opzkit/database-user-operator/issues/198)) ([7dd4e08](https://github.com/opzkit/database-user-operator/commit/7dd4e080dd5ed8d457dd423c71e0ff8bcbc446bb))
+* **deps:** update aws-sdk-go-v2 monorepo ([#200](https://github.com/opzkit/database-user-operator/issues/200)) ([4cb226c](https://github.com/opzkit/database-user-operator/commit/4cb226c285e0a4e16f9324932470524ed34d7201))
+* **deps:** update aws-sdk-go-v2 monorepo ([#206](https://github.com/opzkit/database-user-operator/issues/206)) ([6dc2a72](https://github.com/opzkit/database-user-operator/commit/6dc2a7209dff24dcc330a6ab2914e520f13c19f5))
+* **deps:** update aws-sdk-go-v2 monorepo ([#227](https://github.com/opzkit/database-user-operator/issues/227)) ([51e7836](https://github.com/opzkit/database-user-operator/commit/51e783657aed7b7673999ab0b8a4d6e2269fdabe))
+* **deps:** update aws-sdk-go-v2 monorepo ([#229](https://github.com/opzkit/database-user-operator/issues/229)) ([308b0c4](https://github.com/opzkit/database-user-operator/commit/308b0c4c49e450eb58fdcdfae14741a46e245070))
+* **deps:** update aws-sdk-go-v2 monorepo ([#238](https://github.com/opzkit/database-user-operator/issues/238)) ([65a4bfc](https://github.com/opzkit/database-user-operator/commit/65a4bfc9df1b34fc42e3d07db0edcdf5a52a35f7))
+* **deps:** update aws-sdk-go-v2 monorepo ([#246](https://github.com/opzkit/database-user-operator/issues/246)) ([ef3d21d](https://github.com/opzkit/database-user-operator/commit/ef3d21d88b4008295fe2c4ec45258e638b97e6be))
+* **deps:** update aws-sdk-go-v2 monorepo ([#253](https://github.com/opzkit/database-user-operator/issues/253)) ([1248823](https://github.com/opzkit/database-user-operator/commit/1248823e5ba51125e5da5777d6fc9d510008f745))
+* **deps:** update aws-sdk-go-v2 monorepo ([#260](https://github.com/opzkit/database-user-operator/issues/260)) ([f713499](https://github.com/opzkit/database-user-operator/commit/f713499f02fab1714edd8a927dd7054438957b66))
+* **deps:** update aws-sdk-go-v2 monorepo ([#262](https://github.com/opzkit/database-user-operator/issues/262)) ([38fa627](https://github.com/opzkit/database-user-operator/commit/38fa6276bcc94f47ff2a6c250c73466318c00083))
+* **deps:** update aws-sdk-go-v2 monorepo ([#267](https://github.com/opzkit/database-user-operator/issues/267)) ([a1fd74d](https://github.com/opzkit/database-user-operator/commit/a1fd74d9c4c27cf21b507cb71026010cd95a20a5))
+* **deps:** update aws-sdk-go-v2 monorepo ([#269](https://github.com/opzkit/database-user-operator/issues/269)) ([aa6552b](https://github.com/opzkit/database-user-operator/commit/aa6552bb46368e8a9317d7f0dd2435945d2841c7))
+* **deps:** update aws-sdk-go-v2 monorepo ([#273](https://github.com/opzkit/database-user-operator/issues/273)) ([52d0517](https://github.com/opzkit/database-user-operator/commit/52d05176ce34b8ac8ffe864b03012e860f58ff62))
+* **deps:** update aws-sdk-go-v2 monorepo ([#277](https://github.com/opzkit/database-user-operator/issues/277)) ([95ac4af](https://github.com/opzkit/database-user-operator/commit/95ac4af5f881153798fabdd4f79f7a848f61efd1))
+* **deps:** update aws-sdk-go-v2 monorepo ([#284](https://github.com/opzkit/database-user-operator/issues/284)) ([8eb3263](https://github.com/opzkit/database-user-operator/commit/8eb326307551c4ffb12364695d8343b9217bac5f))
+* **deps:** update aws-sdk-go-v2 monorepo ([#290](https://github.com/opzkit/database-user-operator/issues/290)) ([53ff011](https://github.com/opzkit/database-user-operator/commit/53ff011d1910d2140dadaed78af3e2d1d06ab15e))
+* **deps:** update aws-sdk-go-v2 monorepo ([#292](https://github.com/opzkit/database-user-operator/issues/292)) ([cf6c9b7](https://github.com/opzkit/database-user-operator/commit/cf6c9b7c2821736dece9ebf0eaf955a1188e1f4d))
+* **deps:** update aws-sdk-go-v2 monorepo ([#296](https://github.com/opzkit/database-user-operator/issues/296)) ([1474ca3](https://github.com/opzkit/database-user-operator/commit/1474ca3a1bfa1b02c052294b23b2532270d1fae3))
+* **deps:** update aws-sdk-go-v2 monorepo to v1.32.25 ([#207](https://github.com/opzkit/database-user-operator/issues/207)) ([af544e5](https://github.com/opzkit/database-user-operator/commit/af544e5e18c69e7bd7ecc39e6fd1c460a11f87a6))
+* **deps:** update kubernetes to v0.36.2 ([#210](https://github.com/opzkit/database-user-operator/issues/210)) ([1ebf4a7](https://github.com/opzkit/database-user-operator/commit/1ebf4a7bf72562b84dd1b159efd70d941fcbbfe7))
+* **deps:** update kubernetes to v0.36.3 ([#254](https://github.com/opzkit/database-user-operator/issues/254)) ([53e91e8](https://github.com/opzkit/database-user-operator/commit/53e91e899caa2b3e7eb74125926b58c96cb80938))
+* **deps:** update kubernetes to v0.36.4 ([#285](https://github.com/opzkit/database-user-operator/issues/285)) ([ebc23f6](https://github.com/opzkit/database-user-operator/commit/ebc23f65a6423c64fe058a274558547e757a84c0))
+* **deps:** update kubernetes to v0.37.0 ([#289](https://github.com/opzkit/database-user-operator/issues/289)) ([c674482](https://github.com/opzkit/database-user-operator/commit/c6744828318f34f75019a5aef39ccf4b08bd0785))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.32.29 ([#240](https://github.com/opzkit/database-user-operator/issues/240)) ([31e348d](https://github.com/opzkit/database-user-operator/commit/31e348d78214b7109dc19033235c7d7c746155d7))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.32.39 ([#288](https://github.com/opzkit/database-user-operator/issues/288)) ([68d7c16](https://github.com/opzkit/database-user-operator/commit/68d7c165c21a95974d7ff7046dd34898fe921e71))
+* **deps:** update module github.com/go-logr/logr to v1.4.4 ([#252](https://github.com/opzkit/database-user-operator/issues/252)) ([d2ab861](https://github.com/opzkit/database-user-operator/commit/d2ab861ef5195e4d544bae0104467f00035a31b5))
+* **deps:** update module github.com/go-sql-driver/mysql to v1.10.1 ([#298](https://github.com/opzkit/database-user-operator/issues/298)) ([fe55b08](https://github.com/opzkit/database-user-operator/commit/fe55b083222ad1a1f2e99c5cd7092c116c22d2bc))
+* **deps:** update module github.com/infisical/go-sdk to v0.8.0 ([#187](https://github.com/opzkit/database-user-operator/issues/187)) ([ab6a005](https://github.com/opzkit/database-user-operator/commit/ab6a005e91ac3543e27d4ae72c90512683b621a0))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.30.0 ([#208](https://github.com/opzkit/database-user-operator/issues/208)) ([b065181](https://github.com/opzkit/database-user-operator/commit/b06518132e64279534e9deddcb3cba785255718c))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.31.0 ([#212](https://github.com/opzkit/database-user-operator/issues/212)) ([d5f2f50](https://github.com/opzkit/database-user-operator/commit/d5f2f50a4a5d53ff82dfc4bd7607a6dca965bfcc))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.32.0 ([#218](https://github.com/opzkit/database-user-operator/issues/218)) ([98589f3](https://github.com/opzkit/database-user-operator/commit/98589f38736b861349f6606202ad3e848a53e597))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.32.1 ([#274](https://github.com/opzkit/database-user-operator/issues/274)) ([3143072](https://github.com/opzkit/database-user-operator/commit/3143072b155a8ec8c0991f383d0211ba730de958))
+* **deps:** update module github.com/onsi/gomega to v1.42.0 ([#213](https://github.com/opzkit/database-user-operator/issues/213)) ([c2662a1](https://github.com/opzkit/database-user-operator/commit/c2662a14205f100efeff84d636fd0a3f07eeb409))
+* **deps:** update module github.com/onsi/gomega to v1.42.1 ([#219](https://github.com/opzkit/database-user-operator/issues/219)) ([9375ae6](https://github.com/opzkit/database-user-operator/commit/9375ae6eb5c9873c2cdfdb387896c47de8a17641))
+* **deps:** update module github.com/onsi/gomega to v1.43.0 ([#291](https://github.com/opzkit/database-user-operator/issues/291)) ([a70758e](https://github.com/opzkit/database-user-operator/commit/a70758e18182ba3da4dc17cc64ba88680382b4bc))
+* **deps:** update module github.com/prometheus/client_golang to v1.24.0 ([#251](https://github.com/opzkit/database-user-operator/issues/251)) ([bb10d4e](https://github.com/opzkit/database-user-operator/commit/bb10d4e5914858b9c217b3c86e422ed7a8b42f60))
+* **deps:** update module github.com/prometheus/client_golang to v1.24.1 ([#257](https://github.com/opzkit/database-user-operator/issues/257)) ([695c863](https://github.com/opzkit/database-user-operator/commit/695c863f5175ae8a2922ae8ed341c91a40b344c1))
+* **deps:** update module github.com/scaleway/scaleway-sdk-go to v1.0.0-beta.37 ([#266](https://github.com/opzkit/database-user-operator/issues/266)) ([7b4e1d7](https://github.com/opzkit/database-user-operator/commit/7b4e1d7ac85d3d5f5dd91ca85502676dbbfd6d76))
+* **helm:** set metadata.namespace on all namespaced resources ([#272](https://github.com/opzkit/database-user-operator/issues/272)) ([97c2a45](https://github.com/opzkit/database-user-operator/commit/97c2a4524fa0c913999a807adda607cb17d4595d))
+
 ## [0.7.0](https://github.com/opzkit/database-user-operator/compare/v0.6.0...v0.7.0) (2026-06-01)
 
 
