@@ -1138,7 +1138,8 @@ func needsReconciliation(db *databasev1alpha1.Database) bool {
 // AWS:        rds/<engine>/<databaseName> (path-shaped; AWS RDS is the service name).
 // Scaleway:   rdb/<engine>/<databaseName> (path-shaped; Scaleway RDB is the service name).
 // Infisical:  db/<engine>/<databaseName>  (path-shaped; backend-neutral, hosted secret store).
-// Kubernetes: db-<engine>-<databaseName>  (DNS-1123 — '/' is rejected by Secret name validation).
+// Kubernetes: db-<engine>-<databaseName>  (DNS-1123 — '/' is rejected by Secret name validation;
+// the database name is lowercased and anything outside [a-z0-9.-] becomes '-').
 func getSecretNameOrDefault(db *databasev1alpha1.Database) string {
 	if db.Spec.SecretName != "" {
 		return db.Spec.SecretName
@@ -1155,10 +1156,27 @@ func getSecretNameOrDefault(db *databasev1alpha1.Database) string {
 	case db.Spec.SecretBackend.Infisical != nil:
 		prefix = "db"
 	case db.Spec.SecretBackend.Kubernetes != nil:
-		prefix = "db"
-		sep = "-"
+		return fmt.Sprintf("db-%s-%s", db.Spec.Engine, dns1123Segment(db.Spec.DatabaseName))
 	}
 	return fmt.Sprintf("%s%s%s%s%s", prefix, sep, db.Spec.Engine, sep, db.Spec.DatabaseName)
+}
+
+// dns1123Segment maps a database name (typically snake_case) onto the
+// characters a Secret name allows: lowercase, with every other character
+// replaced by '-' and trailing separators trimmed. Names that were
+// already valid come back unchanged, so existing Secrets keep their name.
+func dns1123Segment(name string) string {
+	mapped := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '.':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r + ('a' - 'A')
+		default:
+			return '-'
+		}
+	}, name)
+	return strings.TrimRight(mapped, "-.")
 }
 
 // getRegion determines the AWS region from the Database spec.
