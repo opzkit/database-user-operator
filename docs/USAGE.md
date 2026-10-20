@@ -101,6 +101,54 @@ connectionString:
     region: us-east-1                   # optional, uses AWS SDK default if not specified
 ```
 
+### connectionString.frostmoln
+
+Reference to a Frostmoln secret containing the admin connection string, read
+through the Frostmoln secrets lookup API:
+
+```yaml
+connectionString:
+  frostmoln:
+    name: postgres-shared-admin-url   # required - Frostmoln secret name
+    key: connectionString             # optional, only used when the value is JSON
+```
+
+The operator authenticates as its own ServiceAccount's workload identity, in
+the tenant set by `FROSTMOLN_TENANT_ID`, so the admin DSN never exists in the
+Database's namespace. Any Database CR can name a secret, so grant the binding
+for the operator's ServiceAccount `secrets:secrets:read` on the admin secret
+only. Frostmoln IAM policies match secrets by UUID, not name. The token Secret
+lives in the operator's namespace; keep read access to Secrets there limited to
+the operator.
+
+The workload-identity add-on writes a short-lived token into the Secret named by
+the ServiceAccount annotation. Mount it at `FROSTMOLN_TOKEN_FILE` (default
+`/var/run/secrets/frostmoln/token`). The operator re-reads the file on every
+lookup, so rotation needs no restart. Helm values:
+
+```yaml
+serviceAccount:
+  annotations:
+    frostmoln.cloud/workload-identity-secret: frostmoln-token
+env:
+  - name: FROSTMOLN_TENANT_ID
+    value: <tenant-uuid>
+extraVolumes:
+  - name: frostmoln-token
+    secret:
+      secretName: frostmoln-token
+      items:
+        - key: token
+          path: token
+extraVolumeMounts:
+  - name: frostmoln-token
+    mountPath: /var/run/secrets/frostmoln
+    readOnly: true
+```
+
+`FROSTMOLN_API_URL` overrides the API endpoint (default
+`https://api.frostmoln.cloud`).
+
 ### secretBackend.aws
 
 Configuration for storing created credentials:

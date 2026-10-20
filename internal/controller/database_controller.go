@@ -903,6 +903,13 @@ func (r *DatabaseReconciler) getConnectionString(ctx context.Context, db *databa
 		return r.getConnectionStringFromScalewaySecret(ctx, db)
 	}
 
+	if db.Spec.ConnectionString.Frostmoln != nil {
+		logger.Info("Using Frostmoln secret for admin connection string",
+			"database", db.Spec.DatabaseName,
+			"name", db.Spec.ConnectionString.Frostmoln.Name)
+		return getConnectionStringFromFrostmolnSecret(ctx, db)
+	}
+
 	// Must be AWS secret (already validated)
 	logger.Info("Using AWS Secrets Manager for admin connection string",
 		"database", db.Spec.DatabaseName,
@@ -1029,39 +1036,56 @@ func (r *DatabaseReconciler) getConnectionStringFromScalewaySecret(ctx context.C
 		return "", fmt.Errorf("failed to get secret %s/%s from Scaleway Secret Manager (check IAM permissions and secret exists): %w", path, swRef.Name, err)
 	}
 
-	key := connectionStringKeyDefault(swRef.Key)
-	value := string(payload)
+	return connectionStringFromPayload(payload, connectionStringKeyDefault(swRef.Key),
+		fmt.Sprintf("Scaleway secret %s/%s", path, swRef.Name))
+}
 
-	// If the payload looks like a JSON object, extract the configured
-	// key. Mirrors the AWS branch behaviour: callers can either store
-	// a single-string secret (raw DSN) or a JSON object with a named
-	// `connectionString` (or user-chosen) property. Sniff by the first
-	// non-whitespace byte rather than `Contains("{")` — a raw DSN can
-	// legitimately embed `{` (e.g. inside a password), and a substring
-	// match would route it down the JSON branch and fail unmarshal.
-	if bytes.HasPrefix(bytes.TrimSpace(payload), []byte("{")) {
-		var data map[string]interface{}
-		if err := json.Unmarshal(payload, &data); err != nil {
-			return "", fmt.Errorf("failed to parse Scaleway secret payload as JSON: %w", err)
+func getConnectionStringFromFrostmolnSecret(ctx context.Context, db *databasev1alpha1.Database) (string, error) {
+	fmRef := db.Spec.ConnectionString.Frostmoln
+
+	fmClient, err := secrets.NewFrostmolnClientFromEnv()
+	if err != nil {
+		return "", fmt.Errorf("failed to construct frostmoln client for admin connection string: %w", err)
+	}
+	payload, err := fmClient.GetSecretValue(ctx, fmRef.Name)
+	if err != nil {
+		return "", fmt.Errorf("failed to get secret %s from Frostmoln: %w", fmRef.Name, err)
+	}
+	return connectionStringFromPayload(payload, connectionStringKeyDefault(fmRef.Key),
+		"Frostmoln secret "+fmRef.Name)
+}
+
+// connectionStringFromPayload returns the admin DSN held in a secret
+// payload. Callers can store either a single-string secret (raw DSN) or
+// a JSON object with a named `connectionString` (or user-chosen)
+// property. Sniff by the first non-whitespace byte rather than
+// `Contains("{")`: a raw DSN can legitimately embed `{` (e.g. inside a
+// password), and a substring match would route it down the JSON branch
+// and fail unmarshal. source names the secret in error messages.
+func connectionStringFromPayload(payload []byte, key, source string) (string, error) {
+	if !bytes.HasPrefix(bytes.TrimSpace(payload), []byte("{")) {
+		if len(payload) == 0 {
+			return "", fmt.Errorf("connection string is empty in %s", source)
 		}
-		raw, ok := data[key]
-		if !ok {
-			return "", fmt.Errorf("key %s not found in Scaleway secret %s/%s", key, path, swRef.Name)
-		}
-		cs, ok := raw.(string)
-		if !ok {
-			return "", fmt.Errorf("value for key %s in Scaleway secret %s/%s is not a string", key, path, swRef.Name)
-		}
-		if cs == "" {
-			return "", fmt.Errorf("connection string is empty in Scaleway secret %s/%s key %s", path, swRef.Name, key)
-		}
-		return cs, nil
+		return string(payload), nil
 	}
 
-	if value == "" {
-		return "", fmt.Errorf("connection string is empty in Scaleway secret %s/%s", path, swRef.Name)
+	var data map[string]interface{}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return "", fmt.Errorf("failed to parse %s payload as JSON: %w", source, err)
 	}
-	return value, nil
+	raw, ok := data[key]
+	if !ok {
+		return "", fmt.Errorf("key %s not found in %s", key, source)
+	}
+	cs, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("value for key %s in %s is not a string", key, source)
+	}
+	if cs == "" {
+		return "", fmt.Errorf("connection string is empty in %s key %s", source, key)
+	}
+	return cs, nil
 }
 
 // validateConnectionSource validates that exactly one connection string source is configured.
@@ -1077,11 +1101,14 @@ func validateConnectionSource(db *databasev1alpha1.Database) error {
 	if cs.Scaleway != nil {
 		set++
 	}
+	if cs.Frostmoln != nil {
+		set++
+	}
 	if set > 1 {
-		return fmt.Errorf("multiple connectionString sources specified, only one is allowed (aws, kubernetes, scaleway)")
+		return fmt.Errorf("multiple connectionString sources specified, only one is allowed (aws, kubernetes, scaleway, frostmoln)")
 	}
 	if set == 0 {
-		return fmt.Errorf("no connectionString source specified (set one of: aws, kubernetes, scaleway)")
+		return fmt.Errorf("no connectionString source specified (set one of: aws, kubernetes, scaleway, frostmoln)")
 	}
 	return nil
 }

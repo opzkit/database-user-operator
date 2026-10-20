@@ -328,6 +328,36 @@ func TestValidateConnectionSource(t *testing.T) {
 			errMsg:  "multiple connectionString sources specified",
 		},
 		{
+			name: "valid - only Frostmoln secret",
+			db: &databasev1alpha1.Database{
+				Spec: databasev1alpha1.DatabaseSpec{
+					ConnectionString: databasev1alpha1.ConnectionStringSource{
+						Frostmoln: &databasev1alpha1.FrostmolnConnectionStringRef{
+							Name: "postgres-shared-admin-url",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid - kubernetes and frostmoln configured",
+			db: &databasev1alpha1.Database{
+				Spec: databasev1alpha1.DatabaseSpec{
+					ConnectionString: databasev1alpha1.ConnectionStringSource{
+						Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+							Name: "my-secret",
+						},
+						Frostmoln: &databasev1alpha1.FrostmolnConnectionStringRef{
+							Name: "postgres-shared-admin-url",
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "multiple connectionString sources specified",
+		},
+		{
 			name: "invalid - neither configured",
 			db: &databasev1alpha1.Database{
 				Spec: databasev1alpha1.DatabaseSpec{},

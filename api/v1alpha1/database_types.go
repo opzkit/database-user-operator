@@ -243,6 +243,13 @@ type ConnectionStringSource struct {
 	// the same namespace as the Database.
 	// +optional
 	Kubernetes *KubernetesConnectionStringRef `json:"kubernetes,omitempty"`
+
+	// Frostmoln reads the connection string from a Frostmoln secret,
+	// authenticated as the operator pod's workload identity. The admin
+	// DSN never has to exist in the Database's namespace, which is what
+	// lets one managed instance serve many namespaces.
+	// +optional
+	Frostmoln *FrostmolnConnectionStringRef `json:"frostmoln,omitempty"`
 }
 
 // AWSConnectionStringRef points at a key in an AWS Secrets Manager secret.
@@ -268,6 +275,27 @@ type KubernetesConnectionStringRef struct {
 	Name string `json:"name"`
 
 	// Key within the secret. Defaults to "connectionString".
+	// +optional
+	Key string `json:"key,omitempty"`
+}
+
+// FrostmolnConnectionStringRef points at a Frostmoln secret holding
+// the admin DSN, looked up by name through the Frostmoln secrets API.
+//
+// There is no per-CR credential or tenant: the operator authenticates
+// with the workload identity token of its own ServiceAccount, mounted
+// as a file (FROSTMOLN_TOKEN_FILE), in the tenant FROSTMOLN_TENANT_ID.
+// The IAM policy on that identity decides which secrets any Database
+// CR can read, as IRSA does for the AWS source.
+type FrostmolnConnectionStringRef struct {
+	// Name is the Frostmoln secret name.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Key within the secret JSON. Defaults to "connectionString". If
+	// the secret value is not JSON the Key is ignored and the raw value
+	// is returned (matches the AWS and Scaleway sources).
 	// +optional
 	Key string `json:"key,omitempty"`
 }
