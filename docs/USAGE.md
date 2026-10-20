@@ -491,15 +491,19 @@ Use this for temporary/test databases.
 - ✅ Updating `secretBackend.aws.tags` - Only updates secret tags
 - ✅ Updating `secretBackend.aws.description` - Only updates description
 - ✅ Updating `privileges` - Reapplies grants
-- ❌ Changing `databaseName` - Not supported (create new resource)
-- ❌ Changing `username` - Not supported (create new resource)
+- ⚠️ Changing `secretName` - Writes a new secret with a **rotated password**; the old secret is left behind with the old one, so pods reading it fail on their next connection
+- ❌ Changing `databaseName` - Rejected by the API server: a new name would create a new, empty database and leave the old one
+- ❌ Changing the effective username (`username`, or `databaseName` when unset) - Rejected by the API server for the same reason; setting `username` to the defaulted value is allowed
 - ❌ Changing `engine` - Not supported (create new resource)
+
+To move to a new name, delete the Database with `retainOnDelete: true` (the
+default) and create a new one, then move the data and drop the old database.
 
 #### Password Management
 
 **Passwords are NEVER changed after initial creation** unless:
 - Creating a new user (doesn't exist yet)
-- Secret was deleted externally (recovery scenario)
+- Secret was deleted externally, or `secretName` changed (the secret is missing, so the operator rotates the password and writes a new one)
 
 The operator **never resets passwords** on existing users, even when:
 - Updating CRD tags
