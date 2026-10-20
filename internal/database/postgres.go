@@ -83,9 +83,9 @@ func (c *PostgresClient) serverVersionNum(ctx context.Context) (int, error) {
 func ParseConnectionString(connectionString string) (*ConnectionInfo, error) {
 	// Handle both URL and DSN formats
 	if strings.HasPrefix(connectionString, "postgres://") || strings.HasPrefix(connectionString, "postgresql://") {
-		u, err := url.Parse(connectionString)
+		u, err := parseConnectionURL(connectionString)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse connection URL: %w", err)
+			return nil, err
 		}
 
 		info := &ConnectionInfo{
