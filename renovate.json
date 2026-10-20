@@ -34,6 +34,19 @@
         "/^k8s\\.io//",
         "sigs.k8s.io/controller-runtime"
       ]
+    },
+    {
+      "description": "Bump the go.mod toolchain and the golang builder image together: make merge-coverage concatenates unit (host toolchain) and integration (image) coverage profiles, and go tool cover rejects blocks counted by different Go versions (inconsistent NumStmt)",
+      "groupName": "go toolchain",
+      "matchPackageNames": [
+        "go",
+        "golang"
+      ],
+      "matchDepTypes": [
+        "toolchain",
+        "stage",
+        "final"
+      ]
     }
   ]
 }
