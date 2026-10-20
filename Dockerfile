@@ -14,9 +14,16 @@ WORKDIR /workspace
 COPY go.mod go.mod
 COPY go.sum go.sum
 
+# Build with exactly the toolchain go.mod names, as setup-go does for the unit
+# tests: make merge-coverage concatenates both coverage profiles, and go tool
+# cover rejects blocks counted by two Go versions. The base image's Go patch
+# release moves on its own schedule, and GOTOOLCHAIN=auto would only ever
+# switch to a newer one, so the name is read from go.mod.
+#
 # Cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
-RUN go mod download
+RUN GOTOOLCHAIN="$(awk '$1 == "toolchain" {print $2}' go.mod)" && export GOTOOLCHAIN="${GOTOOLCHAIN:-local}" && \
+    go mod download
 
 # Copy the go source
 COPY cmd/ cmd/
@@ -24,7 +31,8 @@ COPY api/ api/
 COPY internal/ internal/
 
 # Build with optional coverage instrumentation. Build metadata stamped via -ldflags.
-RUN LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" && \
+RUN GOTOOLCHAIN="$(awk '$1 == "toolchain" {print $2}' go.mod)" && export GOTOOLCHAIN="${GOTOOLCHAIN:-local}" && \
+    LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" && \
     if [ "$ENABLE_COVERAGE" = "true" ]; then \
       CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -cover -covermode=atomic -tags=cover -a -ldflags "$LDFLAGS" -o manager ./cmd/manager; \
     else \
