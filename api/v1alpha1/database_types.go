@@ -127,6 +127,16 @@ type KubernetesSecretBackend struct {
 	// the Database resource.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
+
+	// FieldKeys also writes each top-level field of the secret JSON (the
+	// default format, or the secretTemplate output) as its own data key
+	// next to "credentials", e.g. POSTGRES_URL and DB_PASSWORD, so pods
+	// can read single values with secretKeyRef or envFrom. The operator
+	// then owns the Secret's data: keys it does not write are removed.
+	// Every field must be a string, number or boolean with a valid
+	// Secret key name.
+	// +optional
+	FieldKeys bool `json:"fieldKeys,omitempty"`
 }
 
 // InfisicalSecretBackend stores generated credentials in Infisical

@@ -8,14 +8,19 @@ See LICENSE file in the project root for full license information.
 package secrets
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -37,12 +42,28 @@ const DescriptionAnnotation = "database.opzkit.io/description"
 type KubernetesBackend struct {
 	client    client.Client
 	namespace string
+	fieldKeys bool
+}
+
+// KubernetesOption configures a KubernetesBackend.
+type KubernetesOption func(*KubernetesBackend)
+
+// WithFieldKeys also writes each top-level field of the secret JSON as
+// its own data key, next to "credentials", so pods can consume single
+// values with secretKeyRef or envFrom. The backend then owns the
+// Secret's data: keys it does not write are removed.
+func WithFieldKeys() KubernetesOption {
+	return func(k *KubernetesBackend) { k.fieldKeys = true }
 }
 
 // NewKubernetesBackend constructs a KubernetesBackend that creates
 // Secrets in `namespace`.
-func NewKubernetesBackend(c client.Client, namespace string) *KubernetesBackend {
-	return &KubernetesBackend{client: c, namespace: namespace}
+func NewKubernetesBackend(c client.Client, namespace string, opts ...KubernetesOption) *KubernetesBackend {
+	k := &KubernetesBackend{client: c, namespace: namespace}
+	for _, opt := range opts {
+		opt(k)
+	}
+	return k
 }
 
 // Compile-time check that *KubernetesBackend satisfies Backend.
@@ -90,6 +111,10 @@ func (k *KubernetesBackend) Create(ctx context.Context, name, description string
 	if err != nil {
 		return "", "", fmt.Errorf("failed to marshal database secret: %w", err)
 	}
+	data, err := k.secretData(payload)
+	if err != nil {
+		return "", "", err
+	}
 
 	desired := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -101,9 +126,7 @@ func (k *KubernetesBackend) Create(ctx context.Context, name, description string
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
-		Data: map[string][]byte{
-			CredentialsKey: payload,
-		},
+		Data: data,
 	}
 
 	if err := k.client.Create(ctx, desired); err != nil {
@@ -120,10 +143,7 @@ func (k *KubernetesBackend) Create(ctx context.Context, name, description string
 			existing.Annotations = map[string]string{}
 		}
 		existing.Annotations[DescriptionAnnotation] = description
-		if existing.Data == nil {
-			existing.Data = map[string][]byte{}
-		}
-		existing.Data[CredentialsKey] = payload
+		k.applyData(&existing, data)
 		if err := k.client.Update(ctx, &existing); err != nil {
 			return "", "", fmt.Errorf("failed to update existing kubernetes secret: %w", err)
 		}
@@ -139,6 +159,10 @@ func (k *KubernetesBackend) Update(ctx context.Context, name string, secret *Dat
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal database secret: %w", err)
 	}
+	data, err := k.secretData(payload)
+	if err != nil {
+		return "", err
+	}
 
 	var s corev1.Secret
 	if err := k.client.Get(ctx, k.key(name), &s); err != nil {
@@ -148,15 +172,79 @@ func (k *KubernetesBackend) Update(ctx context.Context, name string, secret *Dat
 		return "", fmt.Errorf("failed to get kubernetes secret for update: %w", err)
 	}
 
-	if s.Data == nil {
-		s.Data = map[string][]byte{}
-	}
-	s.Data[CredentialsKey] = payload
+	k.applyData(&s, data)
 
 	if err := k.client.Update(ctx, &s); err != nil {
 		return "", fmt.Errorf("failed to update kubernetes secret: %w", err)
 	}
 	return s.ResourceVersion, nil
+}
+
+// secretData returns the data for a credentials payload: the JSON under
+// CredentialsKey and, with fieldKeys, each top-level field under its own
+// key. Errors name fields, never values, because they reach Database
+// status and events.
+func (k *KubernetesBackend) secretData(payload []byte) (map[string][]byte, error) {
+	data := map[string][]byte{CredentialsKey: payload}
+	if !k.fieldKeys {
+		return data, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return nil, errors.New("fieldKeys needs the secret JSON to be a JSON object")
+	}
+	// Sorted, so a template with several bad fields always reports the
+	// same one and the Database status does not change between reconciles.
+	names := make([]string, 0, len(fields))
+	for name := range fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		raw := fields[name]
+		if name == CredentialsKey {
+			return nil, fmt.Errorf("field %q collides with the key holding the full JSON", name)
+		}
+		if errs := validation.IsConfigMapKey(name); len(errs) > 0 {
+			return nil, fmt.Errorf("field %q is not a valid Secret key: %s", name, strings.Join(errs, "; "))
+		}
+		value, err := fieldValue(raw)
+		if err != nil {
+			return nil, fmt.Errorf("field %q: %w", name, err)
+		}
+		data[name] = value
+	}
+	return data, nil
+}
+
+// fieldValue returns a JSON value as Secret data: strings unquoted,
+// numbers and booleans as written. Objects, arrays and null have no
+// single value to put in a key.
+func fieldValue(raw json.RawMessage) ([]byte, error) {
+	trimmed := bytes.TrimSpace(raw)
+	// Checked first: json.Unmarshal of null into a string succeeds with "".
+	if len(trimmed) == 0 || trimmed[0] == '{' || trimmed[0] == '[' || bytes.Equal(trimmed, []byte("null")) {
+		return nil, errors.New("fieldKeys needs a string, number or boolean value")
+	}
+	var s string
+	if err := json.Unmarshal(trimmed, &s); err == nil {
+		return []byte(s), nil
+	}
+	return trimmed, nil
+}
+
+// applyData writes data onto an existing Secret. With fieldKeys the
+// backend owns all keys, so a field no longer rendered loses its key;
+// otherwise only CredentialsKey is touched, as before.
+func (k *KubernetesBackend) applyData(s *corev1.Secret, data map[string][]byte) {
+	if k.fieldKeys {
+		s.Data = data
+		return
+	}
+	if s.Data == nil {
+		s.Data = map[string][]byte{}
+	}
+	s.Data[CredentialsKey] = data[CredentialsKey]
 }
 
 // Delete implements Backend. forceDelete is ignored — Kubernetes Secrets

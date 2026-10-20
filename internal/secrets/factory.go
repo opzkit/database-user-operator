@@ -89,7 +89,11 @@ func NewBackend(ctx context.Context, db *databasev1alpha1.Database, k8sClient cl
 		if namespace == "" {
 			namespace = db.Namespace
 		}
-		return NewKubernetesBackend(k8sClient, namespace), nil
+		var opts []KubernetesOption
+		if sb.Kubernetes.FieldKeys {
+			opts = append(opts, WithFieldKeys())
+		}
+		return NewKubernetesBackend(k8sClient, namespace, opts...), nil
 
 	case sb.Infisical != nil:
 		if k8sClient == nil {
