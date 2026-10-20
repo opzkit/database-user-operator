@@ -185,6 +185,28 @@ Look for Warning events at the bottom.
 kubectl logs -l control-plane=controller-manager -c manager --tail=100 -f
 ```
 
+## Database Stuck Deleting
+
+With `retainOnDelete: false`, the finalizer stays until the operator has
+dropped the database, the user and the credentials secret. Dropping needs the
+admin connection string, so a Database whose source is unreadable (a removed
+secret, a revoked grant) retries every minute and blocks namespace deletion.
+
+A Database that never reached its server (`status.provisioningStarted` false)
+is released without cleanup. The operator records `provisioningStarted` before
+its first `CREATE`, so nothing can exist while it is false.
+
+To let go of a Database whose resources exist but can no longer be dropped,
+keep the resources instead of removing the finalizer by hand:
+
+```bash
+kubectl patch database <name> -n <namespace> --type merge -p '{"spec":{"retainOnDelete":true}}'
+```
+
+The operator reads `retainOnDelete` on every attempt, skips cleanup and
+releases the finalizer itself. Drop the database and user manually afterwards
+if they should go.
+
 ## Credential Storage Backend
 
 The admin connection string source (`spec.connectionString`) and the generated-credential destination (`spec.secretBackend`) are independent and configured separately.

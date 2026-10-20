@@ -214,6 +214,15 @@ func (r *DatabaseReconciler) reconcileDatabase(ctx context.Context, db *database
 		}
 	}()
 
+	// Persist before any CREATE: reconcileDelete skips cleanup only while
+	// this is false, so it must be stored before anything can exist.
+	if !db.Status.ProvisioningStarted {
+		db.Status.ProvisioningStarted = true
+		if err := r.Status().Update(ctx, db); err != nil {
+			return fmt.Errorf("failed to record provisioning start: %w", err)
+		}
+	}
+
 	// Get connection info from the client
 	connInfo := dbClient.GetConnectionInfo()
 
@@ -739,6 +748,17 @@ func (r *DatabaseReconciler) reconcileDelete(ctx context.Context, db *databasev1
 		"database", db.Spec.DatabaseName,
 		"retainOnDelete", retainOnDelete)
 
+	// Cleanup needs the admin DSN; an unreadable one (e.g. a revoked
+	// secret grant) would hold the finalizer forever. A Database that
+	// never reached its server owns nothing, so it needs no cleanup. The
+	// Created flags guard Databases provisioned before this field existed.
+	if !retainOnDelete && nothingProvisioned(db.Status) {
+		logger.Info("Database never reached its server, releasing finalizer without cleanup",
+			"database", db.Spec.DatabaseName)
+		controllerutil.RemoveFinalizer(db, DatabaseFinalizer)
+		return ctrl.Result{}, r.Update(ctx, db)
+	}
+
 	if !retainOnDelete {
 		logger.Info("Starting cleanup of database resources (retainOnDelete=false)",
 			"database", db.Spec.DatabaseName,
@@ -1228,4 +1248,10 @@ func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			),
 		}).
 		Complete(r)
+}
+
+// nothingProvisioned reports whether the status proves that no database,
+// user or secret can exist for this Database.
+func nothingProvisioned(s databasev1alpha1.DatabaseStatus) bool {
+	return !s.ProvisioningStarted && !s.DatabaseCreated && !s.UserCreated && !s.SecretCreated
 }

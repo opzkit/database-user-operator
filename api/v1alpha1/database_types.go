@@ -367,6 +367,14 @@ type DatabaseStatus struct {
 	// SecretCreated indicates whether the secret has been created
 	SecretCreated bool `json:"secretCreated,omitempty"`
 
+	// ProvisioningStarted is persisted once the operator has connected
+	// with the admin DSN and before it issues any CREATE. While it is
+	// false nothing can exist for this Database, so deletion needs no
+	// cleanup. The Created flags cannot tell that: each is set only
+	// after its step fully succeeds, so a partly failed step (CREATE
+	// USER succeeds, the following GRANT fails) leaves it false.
+	ProvisioningStarted bool `json:"provisioningStarted,omitempty"`
+
 	// SecretLocator is the backend-specific identifier for the stored
 	// credential secret. For AWS Secrets Manager, this is the ARN
 	// (which carries the region). For a Kubernetes Secret it is
