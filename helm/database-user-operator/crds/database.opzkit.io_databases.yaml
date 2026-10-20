@@ -343,6 +343,16 @@ spec:
                   kubernetes:
                     description: Kubernetes stores credentials as a Kubernetes Secret.
                     properties:
+                      fieldKeys:
+                        description: |-
+                          FieldKeys also writes each top-level field of the secret JSON (the
+                          default format, or the secretTemplate output) as its own data key
+                          next to "credentials", e.g. POSTGRES_URL and DB_PASSWORD, so pods
+                          can read single values with secretKeyRef or envFrom. The operator
+                          then owns the Secret's data: keys it does not write are removed.
+                          Every field must be a string, number or boolean with a valid
+                          Secret key name.
+                        type: boolean
                       namespace:
                         description: |-
                           Namespace the Secret is created in. Defaults to the namespace of

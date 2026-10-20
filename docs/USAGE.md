@@ -118,6 +118,43 @@ secretBackend:
 
 **Note**: Created credentials are **always** stored in AWS Secrets Manager, regardless of where the admin connection string comes from.
 
+### secretBackend.kubernetes
+
+Stores created credentials as a Kubernetes Secret:
+
+```yaml
+secretBackend:
+  kubernetes:
+    namespace: other-ns   # optional, defaults to the Database's namespace
+    fieldKeys: true       # optional, also write each field as its own key
+```
+
+The Secret always holds the full JSON (see [Secret Format](#secret-format), or
+the `secretTemplate` output) under the key `credentials`.
+
+With `fieldKeys: true`, each top-level field is also written as its own key,
+so pods can read single values without decoding JSON. For a Database with
+`secretName: myapp-db`:
+
+```yaml
+env:
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: myapp-db
+        key: POSTGRES_URL
+```
+
+The operator then owns the Secret's data: keys it does not write are removed,
+so a field dropped from `secretTemplate` loses its key. Every field must be a
+string, number or boolean (numbers are written as they appear in the JSON), and
+its name a valid Secret key.
+
+Turning `fieldKeys` off again leaves the field keys in place, and the operator
+no longer updates them, so after the next password change they hold the old
+password. Delete the Secret when turning it off; the operator recreates it with
+only `credentials` and a new password.
+
 ### Region Priority
 
 The operator determines AWS region in this order:
