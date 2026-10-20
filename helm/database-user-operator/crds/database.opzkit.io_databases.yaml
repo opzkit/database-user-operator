@@ -62,7 +62,13 @@ spec:
           metadata:
             type: object
           spec:
-            description: DatabaseSpec defines the desired state of Database
+            description: |-
+              DatabaseSpec defines the desired state of Database
+
+              The database and the user are identified by name, so a changed name
+              does not rename anything: the operator would create a new, empty
+              database and user and leave the old ones behind. The rule compares
+              the effective username, so spelling out the default is allowed.
             properties:
               connectionString:
                 description: |-
@@ -220,6 +226,11 @@ spec:
                 minLength: 1
                 pattern: ^[a-z][a-z0-9_]*$
                 type: string
+                x-kubernetes-validations:
+                - message: 'databaseName is immutable: a new name creates a new, empty
+                    database and leaves the old one; delete the Database (retainOnDelete
+                    keeps the data) and create a new one'
+                  rule: self == oldSelf
               engine:
                 default: postgres
                 description: Engine specifies the database engine type
@@ -441,6 +452,13 @@ spec:
             - engine
             - secretBackend
             type: object
+            x-kubernetes-validations:
+            - message: 'the effective username (username, or databaseName when unset)
+                is immutable: a new name creates a new user and leaves the old one;
+                delete the Database (retainOnDelete keeps the data) and create a new
+                one'
+              rule: '(has(self.username) ? self.username : self.databaseName) == (has(oldSelf.username)
+                ? oldSelf.username : oldSelf.databaseName)'
           status:
             description: DatabaseStatus defines the observed state of Database
             properties:

@@ -773,4 +773,53 @@ var _ = Describe("Database Operator Integration Tests", func() {
 			waitForDatabaseDeleted(namespace, dbName)
 		})
 	})
+
+	Context("Immutable identity", func() {
+		It("Should reject changes to databaseName and the effective username", func() {
+			dbName := "test-immutable-" + randomString(5)
+
+			// The API server enforces this, so the Database needs no working
+			// connection: it stays in Error while the spec is patched.
+			createDatabase(namespace, dbName, databasev1alpha1.DatabaseSpec{
+				Engine:       databasev1alpha1.DatabaseEnginePostgres,
+				DatabaseName: "immutabledb",
+				ConnectionString: databasev1alpha1.ConnectionStringSource{
+					Kubernetes: &databasev1alpha1.KubernetesConnectionStringRef{
+						Name: "non-existent-secret",
+					},
+				},
+				SecretBackend: databasev1alpha1.SecretBackend{
+					Kubernetes: &databasev1alpha1.KubernetesSecretBackend{},
+				},
+			})
+
+			// A merge patch carries no resourceVersion, so the operator's
+			// status writes cannot turn a rejection into a conflict.
+			patchSpec := func(mutate func(*databasev1alpha1.DatabaseSpec)) error {
+				db, err := getDatabase(namespace, dbName)
+				Expect(err).NotTo(HaveOccurred())
+				orig := db.DeepCopy()
+				mutate(&db.Spec)
+				return k8sClient.Patch(ctx, db, client.MergeFrom(orig))
+			}
+
+			By("Rejecting a new databaseName")
+			Expect(patchSpec(func(s *databasev1alpha1.DatabaseSpec) { s.DatabaseName = "renameddb" })).
+				To(MatchError(ContainSubstring("databaseName is immutable")))
+
+			By("Rejecting a username that differs from the defaulted one")
+			Expect(patchSpec(func(s *databasev1alpha1.DatabaseSpec) { s.Username = "otheruser" })).
+				To(MatchError(ContainSubstring("effective username")))
+
+			By("Allowing the default username to be spelled out")
+			Expect(patchSpec(func(s *databasev1alpha1.DatabaseSpec) { s.Username = "immutabledb" })).To(Succeed())
+
+			By("Allowing other fields to change")
+			Expect(patchSpec(func(s *databasev1alpha1.DatabaseSpec) { s.SecretName = "immutable-db-v2" })).To(Succeed())
+
+			By("Cleaning up")
+			Expect(deleteDatabase(namespace, dbName)).Should(Succeed())
+			waitForDatabaseDeleted(namespace, dbName)
+		})
+	})
 })

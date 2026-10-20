@@ -23,6 +23,12 @@ const (
 )
 
 // DatabaseSpec defines the desired state of Database
+//
+// The database and the user are identified by name, so a changed name
+// does not rename anything: the operator would create a new, empty
+// database and user and leave the old ones behind. The rule compares
+// the effective username, so spelling out the default is allowed.
+// +kubebuilder:validation:XValidation:rule="(has(self.username) ? self.username : self.databaseName) == (has(oldSelf.username) ? oldSelf.username : oldSelf.databaseName)",message="the effective username (username, or databaseName when unset) is immutable: a new name creates a new user and leaves the old one; delete the Database (retainOnDelete keeps the data) and create a new one"
 type DatabaseSpec struct {
 	// Engine specifies the database engine type
 	// +kubebuilder:validation:Required
@@ -34,6 +40,7 @@ type DatabaseSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:Pattern=`^[a-z][a-z0-9_]*$`
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="databaseName is immutable: a new name creates a new, empty database and leaves the old one; delete the Database (retainOnDelete keeps the data) and create a new one"
 	DatabaseName string `json:"databaseName"`
 
 	// ConnectionString sources the admin DSN used to create the database
