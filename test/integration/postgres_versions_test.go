@@ -102,6 +102,7 @@ var _ = Describe("PostgreSQL Version Compatibility", func() {
 			By("Verifying status reflects success")
 			db, err := getDatabase(namespace, dbName)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(db.Status.ProvisioningStarted).To(BeTrue())
 			Expect(db.Status.DatabaseCreated).To(BeTrue())
 			Expect(db.Status.UserCreated).To(BeTrue())
 			Expect(db.Status.ActualUsername).To(Equal(fmt.Sprintf("pg%suser", c.version)))
