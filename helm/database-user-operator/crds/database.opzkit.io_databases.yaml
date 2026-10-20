@@ -128,6 +128,26 @@ spec:
                     - region
                     - secretName
                     type: object
+                  frostmoln:
+                    description: |-
+                      Frostmoln reads the connection string from a Frostmoln secret,
+                      authenticated as the operator pod's workload identity. The admin
+                      DSN never has to exist in the Database's namespace, which is what
+                      lets one managed instance serve many namespaces.
+                    properties:
+                      key:
+                        description: |-
+                          Key within the secret JSON. Defaults to "connectionString". If
+                          the secret value is not JSON the Key is ignored and the raw value
+                          is returned (matches the AWS and Scaleway sources).
+                        type: string
+                      name:
+                        description: Name is the Frostmoln secret name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
                   kubernetes:
                     description: |-
                       Kubernetes reads the connection string from a Kubernetes Secret in
