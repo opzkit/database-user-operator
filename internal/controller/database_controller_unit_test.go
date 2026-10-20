@@ -589,6 +589,45 @@ func TestGetSecretNameOrDefault(t *testing.T) {
 			},
 			want: "db-postgres-loyalty",
 		},
+		{
+			name: "Kubernetes backend - underscores and uppercase mapped to DNS-1123",
+			db: &databasev1alpha1.Database{
+				Spec: databasev1alpha1.DatabaseSpec{
+					Engine:       databasev1alpha1.DatabaseEnginePostgres,
+					DatabaseName: "Ibis_Sync",
+					SecretBackend: databasev1alpha1.SecretBackend{
+						Kubernetes: &databasev1alpha1.KubernetesSecretBackend{},
+					},
+				},
+			},
+			want: "db-postgres-ibis-sync",
+		},
+		{
+			name: "Kubernetes backend - trailing invalid character trimmed",
+			db: &databasev1alpha1.Database{
+				Spec: databasev1alpha1.DatabaseSpec{
+					Engine:       databasev1alpha1.DatabaseEnginePostgres,
+					DatabaseName: "orders_",
+					SecretBackend: databasev1alpha1.SecretBackend{
+						Kubernetes: &databasev1alpha1.KubernetesSecretBackend{},
+					},
+				},
+			},
+			want: "db-postgres-orders",
+		},
+		{
+			name: "AWS backend - database name kept verbatim",
+			db: &databasev1alpha1.Database{
+				Spec: databasev1alpha1.DatabaseSpec{
+					Engine:       databasev1alpha1.DatabaseEnginePostgres,
+					DatabaseName: "ibis_sync",
+					SecretBackend: databasev1alpha1.SecretBackend{
+						AWS: &databasev1alpha1.AWSSecretBackend{},
+					},
+				},
+			},
+			want: "rds/postgres/ibis_sync",
+		},
 	}
 
 	for _, tt := range tests {

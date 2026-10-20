@@ -66,7 +66,7 @@ matches the chosen backend's native service name:
 | AWS         | `rds/<engine>/<databaseName>` (AWS service name) |
 | Scaleway    | `rdb/<engine>/<databaseName>` (Scaleway service name) |
 | Infisical   | `db/<engine>/<databaseName>` (backend-neutral) |
-| Kubernetes  | `db-<engine>-<databaseName>` (backend-neutral; DNS-1123) |
+| Kubernetes  | `db-<engine>-<databaseName>` (backend-neutral; DNS-1123: lowercased, `_` and other invalid characters become `-`) |
 
 ### connectionString.kubernetes
 
