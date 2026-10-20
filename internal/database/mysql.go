@@ -11,7 +11,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/url"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql" // MySQL driver
@@ -182,9 +181,9 @@ func (c *MySQLClient) GetConnectionInfo() *ConnectionInfo {
 func ParseMySQLConnectionString(connectionString string) (*ConnectionInfo, error) {
 	// Handle MySQL URL format: mysql://user:pass@host:port/database
 	if strings.HasPrefix(connectionString, "mysql://") {
-		u, err := url.Parse(connectionString)
+		u, err := parseConnectionURL(connectionString)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse connection URL: %w", err)
+			return nil, err
 		}
 
 		info := &ConnectionInfo{
