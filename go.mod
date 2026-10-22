@@ -7,7 +7,7 @@ toolchain go1.27.3
 require (
 	github.com/aws/aws-sdk-go-v2 v1.47.3
 	github.com/aws/aws-sdk-go-v2/config v1.33.9
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.50.4
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.50.5
 	github.com/go-logr/logr v1.4.4
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/infisical/go-sdk v0.8.0
