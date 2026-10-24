@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/opzkit/database-user-operator/compare/v0.8.0...v0.8.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/secretsmanager to v1.50.5 ([#356](https://github.com/opzkit/database-user-operator/issues/356)) ([8030a57](https://github.com/opzkit/database-user-operator/commit/8030a576c8ea6dc64abb1fb157ded3aae8560588))
+
 ## [0.8.0](https://github.com/opzkit/database-user-operator/compare/v0.7.0...v0.8.0) (2026-10-20)
 
 
