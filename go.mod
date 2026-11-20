@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.19
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.51.0
 	github.com/go-logr/logr v1.4.4
-	github.com/go-sql-driver/mysql v1.10.1
+	github.com/go-sql-driver/mysql v1.10.2
 	github.com/infisical/go-sdk v0.9.1
 	github.com/lib/pq v1.12.3
 	github.com/onsi/ginkgo/v2 v2.34.0
