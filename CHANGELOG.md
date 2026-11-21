@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.8.1](https://github.com/opzkit/database-user-operator/compare/v0.8.0...v0.8.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **deps:** update aws-sdk-go-v2 monorepo ([#360](https://github.com/opzkit/database-user-operator/issues/360)) ([02dc600](https://github.com/opzkit/database-user-operator/commit/02dc6001d9f77836d2d26c92c023d415861d36db))
+* **deps:** update aws-sdk-go-v2 monorepo ([#363](https://github.com/opzkit/database-user-operator/issues/363)) ([c130108](https://github.com/opzkit/database-user-operator/commit/c130108f1c98d192abba2f9300f5cea8baa46759))
+* **deps:** update aws-sdk-go-v2 monorepo ([#368](https://github.com/opzkit/database-user-operator/issues/368)) ([dbdc600](https://github.com/opzkit/database-user-operator/commit/dbdc600c244d00659e8b3b2be5af9d652c792c79))
+* **deps:** update aws-sdk-go-v2 monorepo ([#371](https://github.com/opzkit/database-user-operator/issues/371)) ([e33dfa8](https://github.com/opzkit/database-user-operator/commit/e33dfa8960d4b3c0959519045153bf683c93aa4f))
+* **deps:** update aws-sdk-go-v2 monorepo ([#376](https://github.com/opzkit/database-user-operator/issues/376)) ([b47bc1e](https://github.com/opzkit/database-user-operator/commit/b47bc1e2a6741f1ed823edc5ef31acf94a5dacc1))
+* **deps:** update aws-sdk-go-v2 monorepo ([#381](https://github.com/opzkit/database-user-operator/issues/381)) ([213f632](https://github.com/opzkit/database-user-operator/commit/213f63252a94a510b5de16db9d0a703141670a1d))
+* **deps:** update kubernetes to v0.37.2 ([#366](https://github.com/opzkit/database-user-operator/issues/366)) ([db3aa7a](https://github.com/opzkit/database-user-operator/commit/db3aa7aebc9c797c7677b18ffa5611545bbd1162))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.33.17 ([#377](https://github.com/opzkit/database-user-operator/issues/377)) ([af3f81d](https://github.com/opzkit/database-user-operator/commit/af3f81dc33d3994be8fcef29dd7b7ac38d28f3e6))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.33.19 ([#387](https://github.com/opzkit/database-user-operator/issues/387)) ([04fb473](https://github.com/opzkit/database-user-operator/commit/04fb47309d846e2963000e18a68da1bcd4d5f7e4))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/secretsmanager to v1.50.5 ([#356](https://github.com/opzkit/database-user-operator/issues/356)) ([8030a57](https://github.com/opzkit/database-user-operator/commit/8030a576c8ea6dc64abb1fb157ded3aae8560588))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/secretsmanager to v1.51.0 ([#384](https://github.com/opzkit/database-user-operator/issues/384)) ([a3d1aa1](https://github.com/opzkit/database-user-operator/commit/a3d1aa1016fe44317ecb0b78f3ec7ebfc2e41f67))
+* **deps:** update module github.com/go-sql-driver/mysql to v1.10.2 ([#389](https://github.com/opzkit/database-user-operator/issues/389)) ([0fb8e2c](https://github.com/opzkit/database-user-operator/commit/0fb8e2c035ce8f696fc771a24e0b0a62b364436f))
+* **deps:** update module github.com/infisical/go-sdk to v0.9.0 ([#359](https://github.com/opzkit/database-user-operator/issues/359)) ([df67ad2](https://github.com/opzkit/database-user-operator/commit/df67ad212ef221f32570c0e8e547b77f18e4430d))
+* **deps:** update module github.com/infisical/go-sdk to v0.9.1 ([#364](https://github.com/opzkit/database-user-operator/issues/364)) ([3e5b38c](https://github.com/opzkit/database-user-operator/commit/3e5b38c3b3790c67eed84698d0b46c813314ef39))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.34.0 ([#369](https://github.com/opzkit/database-user-operator/issues/369)) ([00c2058](https://github.com/opzkit/database-user-operator/commit/00c2058bee97d07a66a65f4900d40120ce38e4be))
+* **deps:** update module sigs.k8s.io/controller-runtime to v0.25.3 ([#386](https://github.com/opzkit/database-user-operator/issues/386)) ([dd1b61d](https://github.com/opzkit/database-user-operator/commit/dd1b61d873c14bff851f94a5e69697bbbb7ea71c))
+
 ## [0.8.0](https://github.com/opzkit/database-user-operator/compare/v0.7.0...v0.8.0) (2026-10-20)
 
 
