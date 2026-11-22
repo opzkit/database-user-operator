@@ -18,7 +18,7 @@ require (
 	github.com/scaleway/scaleway-sdk-go v1.39.0
 	k8s.io/api v0.37.2
 	k8s.io/apimachinery v0.37.2
-	k8s.io/client-go v0.37.2
+	k8s.io/client-go v1.5.2
 	sigs.k8s.io/controller-runtime v0.25.3
 )
 
